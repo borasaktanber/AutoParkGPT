@@ -54,6 +54,14 @@ def _auth() -> dict[str, str]:
     return {"X-Admin-Token": _TOKEN}
 
 
+def test_admin_ui_served_without_token(client: TestClient) -> None:
+    # The console page is static (no secrets); it must load so the admin can enter a token.
+    response = client.get("/admin/ui")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+    assert "Admin Console" in response.text
+
+
 def test_requires_token(client: TestClient) -> None:
     assert client.get("/admin/reservations").status_code == 401
 

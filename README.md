@@ -107,6 +107,10 @@ endpoints fail closed if it's unset). The decision flows back to the user — vi
 (`AUTOPARK_ADMIN__USER_WEBHOOK_URL`) and by asking the chatbot about the reservation
 reference.
 
+A web **admin console** is served at **http://127.0.0.1:8000/admin/ui** — enter the token,
+view pending requests, and Approve / Reject (or type a natural-language decision) per row.
+The same actions are available as REST endpoints:
+
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/admin/reservations` | List pending reservations |

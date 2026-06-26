@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AutoParkGPT — Admin Console</title>
+  <style>
+    :root {
+      --bg: #0f1419; --panel: #1a2029; --line: #2a323d; --text: #e6edf3;
+      --muted: #8b97a5; --accent: #38bdf8; --ok: #22c55e; --bad: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+    header {
+      padding: 14px 20px; border-bottom: 1px solid var(--line);
+      display: flex; align-items: baseline; gap: 10px;
+    }
+    header h1 { font-size: 17px; margin: 0; }
+    header span { color: var(--muted); font-size: 13px; }
+    main { max-width: 980px; margin: 0 auto; padding: 20px; }
+    .bar { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; flex-wrap: wrap; }
+    input, button {
+      font-size: 14px; border-radius: 8px; border: 1px solid var(--line);
+      background: var(--panel); color: var(--text); padding: 9px 12px; outline: none;
+    }
+    input:focus { border-color: var(--accent); }
+    #token { flex: 1; min-width: 240px; }
+    button { cursor: pointer; border: 0; }
+    button.primary { background: var(--accent); color: #07212e; font-weight: 600; }
+    button.ok { background: var(--ok); color: #06210f; font-weight: 600; }
+    button.bad { background: var(--bad); color: #2a0606; font-weight: 600; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    #msg { color: var(--muted); font-size: 13px; margin-bottom: 12px; min-height: 18px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); font-size: 14px; }
+    th { color: var(--muted); font-weight: 600; }
+    td.actions { white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+    td.actions input { width: 150px; padding: 6px 8px; }
+    .ref { font-family: ui-monospace, monospace; color: var(--accent); }
+    .empty { color: var(--muted); padding: 20px 8px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>AutoParkGPT — Admin Console</h1>
+    <span>review &amp; decide pending reservations</span>
+  </header>
+  <main>
+    <div class="bar">
+      <input id="token" type="password" placeholder="X-Admin-Token" autocomplete="off" />
+      <button class="primary" id="refresh">Load pending</button>
+    </div>
+    <div id="msg"></div>
+    <table>
+      <thead>
+        <tr><th>Reference</th><th>Name</th><th>Car</th><th>Period</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </main>
+
+  <script>
+    const tokenInput = document.getElementById("token");
+    const rows = document.getElementById("rows");
+    const msg = document.getElementById("msg");
+    tokenInput.value = sessionStorage.getItem("adminToken") || "";
+
+    function token() {
+      const t = tokenInput.value.trim();
+      sessionStorage.setItem("adminToken", t);
+      return t;
+    }
+    function headers() {
+      return { "X-Admin-Token": token(), "content-type": "application/json" };
+    }
+    function setMsg(text, isError) {
+      msg.textContent = text;
+      msg.style.color = isError ? "#fca5a5" : "var(--muted)";
+    }
+
+    async function load() {
+      if (!token()) { setMsg("Enter the admin token first.", true); return; }
+      setMsg("Loading…");
+      try {
+        const res = await fetch("/admin/reservations", { headers: headers() });
+        if (res.status === 401) { setMsg("Unauthorized — check the token.", true); rows.innerHTML = ""; return; }
+        const data = await res.json();
+        render(data);
+        setMsg(`${data.length} pending reservation(s).`);
+      } catch (e) {
+        setMsg("Failed to reach the server.", true);
+      }
+    }
+
+    function render(list) {
+      rows.innerHTML = "";
+      if (!list.length) {
+        rows.innerHTML = '<tr><td class="empty" colspan="5">No pending reservations 🎉</td></tr>';
+        return;
+      }
+      for (const r of list) {
+        const tr = document.createElement("tr");
+        const period = `${r.period_start.replace("T", " ").slice(0, 16)} → ${r.period_end.slice(11, 16)}`;
+        tr.innerHTML = `
+          <td class="ref">${r.reference}</td>
+          <td>${r.first_name} ${r.last_name}</td>
+          <td>${r.car_number}</td>
+          <td>${period}</td>`;
+        const actions = document.createElement("td");
+        actions.className = "actions";
+        actions.appendChild(button("Approve", "ok", () => decide(r.reference, "approve")));
+        actions.appendChild(button("Reject", "bad", () => decide(r.reference, "reject")));
+        const nl = document.createElement("input");
+        nl.placeholder = "e.g. approve it";
+        const decideBtn = button("Decide", "primary", () => decideNL(r.reference, nl.value));
+        actions.appendChild(nl);
+        actions.appendChild(decideBtn);
+        tr.appendChild(actions);
+        rows.appendChild(tr);
+      }
+    }
+
+    function button(label, cls, onClick) {
+      const b = document.createElement("button");
+      b.textContent = label;
+      b.className = cls;
+      b.addEventListener("click", onClick);
+      return b;
+    }
+
+    async function decide(reference, action) {
+      await post(`/admin/reservations/${reference}/${action}`);
+    }
+    async function decideNL(reference, instruction) {
+      if (!instruction.trim()) { setMsg("Type an instruction for the decision.", true); return; }
+      await post(`/admin/reservations/${reference}/decision`, { instruction });
+    }
+
+    async function post(path, body) {
+      setMsg("Working…");
+      try {
+        const res = await fetch(path, {
+          method: "POST",
+          headers: headers(),
+          body: body ? JSON.stringify(body) : undefined,
+        });
+        const data = await res.json();
+        if (!res.ok) { setMsg(data.detail || "Action failed.", true); return; }
+        setMsg(`Reservation ${data.reference} → ${data.status}.`);
+        load();
+      } catch (e) {
+        setMsg("Action failed.", true);
+      }
+    }
+
+    document.getElementById("refresh").addEventListener("click", load);
+    tokenInput.addEventListener("keydown", (e) => { if (e.key === "Enter") load(); });
+    if (tokenInput.value) load();
+  </script>
+</body>
+</html>

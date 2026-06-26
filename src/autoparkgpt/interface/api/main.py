@@ -18,7 +18,9 @@ from autoparkgpt.interface.api.admin import build_admin_router
 from autoparkgpt.interface.api.schemas import ChatReply, ChatRequest, HealthReply
 
 _logger = structlog.get_logger(__name__)
-_CHAT_PAGE = Path(__file__).parent / "static" / "chat.html"
+_STATIC = Path(__file__).parent / "static"
+_CHAT_PAGE = _STATIC / "chat.html"
+_ADMIN_PAGE = _STATIC / "admin.html"
 
 
 def _get_chat_service(request: Request) -> ChatService:
@@ -60,6 +62,12 @@ def create_app(container: Container | None = None) -> FastAPI:
     @app.get("/", include_in_schema=False)
     def chat_ui() -> FileResponse:
         return FileResponse(_CHAT_PAGE)
+
+    # Static admin console page. The page itself is unauthenticated (it contains no
+    # secrets); the admin token is entered in the page and sent on each /admin API call.
+    @app.get("/admin/ui", include_in_schema=False)
+    def admin_ui() -> FileResponse:
+        return FileResponse(_ADMIN_PAGE)
 
     @app.get("/health", response_model=HealthReply)
     def health() -> HealthReply:
