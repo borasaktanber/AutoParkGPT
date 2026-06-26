@@ -53,6 +53,10 @@ def build_admin_router() -> APIRouter:
     def list_pending(service: AdminApprovalService = Depends(_service)) -> list[ReservationView]:
         return [ReservationView.from_entity(r) for r in service.list_pending()]
 
+    @router.get("/history", response_model=list[ReservationView])
+    def list_history(service: AdminApprovalService = Depends(_service)) -> list[ReservationView]:
+        return [ReservationView.from_entity(r) for r in service.list_all()]
+
     @router.post("/reservations/{reference}/approve", response_model=ReservationView)
     def approve(
         reference: str,

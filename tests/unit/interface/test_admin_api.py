@@ -80,6 +80,24 @@ def test_list_pending(client: TestClient, repo: InMemoryReservationRepository) -
     assert {r["reference"] for r in body} == {r.id[:8] for r in repo.list_all()}
 
 
+def test_history_requires_token(client: TestClient) -> None:
+    assert client.get("/admin/history").status_code == 401
+
+
+def test_history_lists_all_statuses(
+    client: TestClient, repo: InMemoryReservationRepository
+) -> None:
+    approved = repo.add(_reservation("Ada"))
+    repo.add(_reservation("Grace"))  # stays pending
+    repo.update(approved.approve())
+    response = client.get("/admin/history", headers=_auth())
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    statuses = {r["reference"]: r["status"] for r in body}
+    assert statuses[approved.id[:8]] == "approved"
+
+
 def test_approve(client: TestClient, repo: InMemoryReservationRepository) -> None:
     saved = repo.add(_reservation())
     response = client.post(f"/admin/reservations/{saved.id[:8]}/approve", headers=_auth())

@@ -41,6 +41,12 @@
     td.actions input { width: 150px; padding: 6px 8px; }
     .ref { font-family: ui-monospace, monospace; color: var(--accent); }
     .empty { color: var(--muted); padding: 20px 8px; }
+    h2 { font-size: 15px; margin: 28px 0 8px; color: var(--text); }
+    .badge { padding: 2px 9px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); }
+    .badge.pending_approval { color: #fcd34d; border-color: #78581a; }
+    .badge.approved { color: #86efac; border-color: #14532d; }
+    .badge.rejected { color: #fca5a5; border-color: #7f1d1d; }
+    .badge.cancelled { color: var(--muted); }
   </style>
 </head>
 <body>
@@ -51,21 +57,34 @@
   <main>
     <div class="bar">
       <input id="token" type="password" placeholder="X-Admin-Token" autocomplete="off" />
-      <button class="primary" id="refresh">Load pending</button>
+      <button class="primary" id="refresh">Load</button>
     </div>
     <div id="msg"></div>
+
+    <h2>Pending reservations</h2>
     <table>
       <thead>
         <tr><th>Reference</th><th>Name</th><th>Car</th><th>Period</th><th>Actions</th></tr>
       </thead>
       <tbody id="rows"></tbody>
     </table>
+
+    <h2>All reservations (history)</h2>
+    <table>
+      <thead>
+        <tr><th>Reference</th><th>Name</th><th>Car</th><th>Period</th><th>Status</th></tr>
+      </thead>
+      <tbody id="history"></tbody>
+    </table>
   </main>
 
   <script>
     const tokenInput = document.getElementById("token");
     const rows = document.getElementById("rows");
+    const historyRows = document.getElementById("history");
     const msg = document.getElementById("msg");
+    const fmtPeriod = (r) =>
+      `${r.period_start.replace("T", " ").slice(0, 16)} → ${r.period_end.slice(11, 16)}`;
     tokenInput.value = sessionStorage.getItem("adminToken") || "";
 
     function token() {
@@ -85,13 +104,40 @@
       if (!token()) { setMsg("Enter the admin token first.", true); return; }
       setMsg("Loading…");
       try {
-        const res = await fetch("/admin/reservations", { headers: headers() });
-        if (res.status === 401) { setMsg("Unauthorized — check the token.", true); rows.innerHTML = ""; return; }
-        const data = await res.json();
-        render(data);
-        setMsg(`${data.length} pending reservation(s).`);
+        const [pendingRes, historyRes] = await Promise.all([
+          fetch("/admin/reservations", { headers: headers() }),
+          fetch("/admin/history", { headers: headers() }),
+        ]);
+        if (pendingRes.status === 401 || historyRes.status === 401) {
+          setMsg("Unauthorized — check the token.", true);
+          rows.innerHTML = ""; historyRows.innerHTML = "";
+          return;
+        }
+        const pending = await pendingRes.json();
+        const history = await historyRes.json();
+        render(pending);
+        renderHistory(history);
+        setMsg(`${pending.length} pending · ${history.length} total reservation(s).`);
       } catch (e) {
         setMsg("Failed to reach the server.", true);
+      }
+    }
+
+    function renderHistory(list) {
+      historyRows.innerHTML = "";
+      if (!list.length) {
+        historyRows.innerHTML = '<tr><td class="empty" colspan="5">No reservations yet.</td></tr>';
+        return;
+      }
+      for (const r of list) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td class="ref">${r.reference}</td>
+          <td>${r.first_name} ${r.last_name}</td>
+          <td>${r.car_number}</td>
+          <td>${fmtPeriod(r)}</td>
+          <td><span class="badge ${r.status}">${r.status.replace("_", " ")}</span></td>`;
+        historyRows.appendChild(tr);
       }
     }
 

@@ -35,6 +35,11 @@ class AdminApprovalService:
     def list_pending(self) -> list[Reservation]:
         return self._repo.list_by_status(ReservationStatus.PENDING_APPROVAL)
 
+    def list_all(self) -> list[Reservation]:
+        """Return the full reservation history (most-recent first)."""
+
+        return self._repo.list_all()
+
     def approve(self, reference: str) -> Reservation:
         return self._decide(reference, approve=True)
 
