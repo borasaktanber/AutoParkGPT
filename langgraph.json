@@ -1,0 +1,7 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "autoparkgpt": "./src/autoparkgpt/application/graphs/studio.py:make_graph"
+  },
+  "env": ".env"
+}

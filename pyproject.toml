@@ -56,6 +56,8 @@ dev = [
     "ruff>=0.5",
     "mypy>=1.10",
     "types-requests",
+    # LangGraph Studio / visual debugger (`langgraph dev`).
+    "langgraph-cli[inmem]>=0.1.55",
 ]
 
 [project.scripts]
