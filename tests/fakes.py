@@ -134,3 +134,13 @@ class RecordingUserNotifier:
 
     def notify_decision(self, reservation: Reservation) -> None:
         self.decisions.append(reservation)
+
+
+class RecordingReservationRecorder:
+    """ReservationRecorderPort double that records what it was asked to persist."""
+
+    def __init__(self) -> None:
+        self.recorded: list[Reservation] = []
+
+    def record(self, reservation: Reservation) -> None:
+        self.recorded.append(reservation)

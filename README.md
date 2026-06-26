@@ -6,10 +6,11 @@ parking questions (general info, working hours, prices, availability, location) 
 interactively collects reservation requests, behind a layered Clean Architecture with a
 security guardrail pipeline.
 
-> **Project status:** **Stages 1 & 2 complete** — RAG chatbot + human-in-the-loop
-> administrator approval. Stages 3–4 (MCP server, unified LangGraph orchestration) are
-> planned — see [`TASKS.md`](TASKS.md). Full design rationale is in
-> [`ARCHITECTURE.md`](ARCHITECTURE.md); evaluation methodology in [`EVALUATION.md`](EVALUATION.md).
+> **Project status:** **Stages 1–3 complete** — RAG chatbot, human-in-the-loop
+> administrator approval, and an MCP server that records approved reservations. Stage 4
+> (unified LangGraph orchestration) is planned — see [`TASKS.md`](TASKS.md). Full design
+> rationale is in [`ARCHITECTURE.md`](ARCHITECTURE.md); evaluation methodology in
+> [`EVALUATION.md`](EVALUATION.md).
 
 ---
 
@@ -131,6 +132,36 @@ curl -s -X POST localhost:8000/admin/reservations/675e1e8a/decision \
 Then the user can ask the chatbot: *"What's the status of reservation 675e1e8a?"* →
 "…has been approved."
 
+### MCP server — approved-reservation record (Stage 3)
+
+On **approval**, the reservation is appended to a text file in the format
+`Name | Car Number | Reservation Period | Approval Time`, exposed via a
+[Model Context Protocol](https://modelcontextprotocol.io/) server with four tools:
+`save_reservation`, `list_reservations`, `find_reservation`, `health_check`.
+
+Run it over stdio:
+
+```bash
+autoparkgpt-mcp          # serves the records file at AUTOPARK_RECORDING__FILE_PATH
+```
+
+Register it with an MCP host (e.g. Claude Desktop `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "autoparkgpt-reservations": {
+      "command": "autoparkgpt-mcp",
+      "env": { "AUTOPARK_RECORDING__FILE_PATH": "data/reservations.txt" }
+    }
+  }
+}
+```
+
+**Security:** the file path is server-configured (never client-supplied — no path
+traversal); inputs are validated/normalized and the `|` separator is rejected in
+free-text fields; `list`/`find` are read-only. Over HTTP, front it with auth.
+
 ### CLI
 
 ```bash
@@ -159,6 +190,7 @@ via the environment only and never committed.**
 | `AUTOPARK_ADMIN__API_TOKEN` | — | secures `/admin` endpoints (fail-closed if unset) |
 | `AUTOPARK_ADMIN__ADMIN_WEBHOOK_URL` | — | optional: notify admin of new reservations |
 | `AUTOPARK_ADMIN__USER_WEBHOOK_URL` | — | optional: notify user of the decision |
+| `AUTOPARK_RECORDING__FILE_PATH` | `data/reservations.txt` | approved-reservation record file (MCP) |
 
 ---
 

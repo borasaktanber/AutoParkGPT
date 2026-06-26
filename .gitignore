@@ -23,6 +23,9 @@ htmlcov/
 *.db
 *.sqlite3
 
+# Stage 3 runtime output (approved-reservations record)
+data/reservations.txt
+
 # Secrets / env
 .env
 .env.*

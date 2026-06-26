@@ -104,6 +104,14 @@ class AdminSettings(BaseSettings):
     notify_timeout_seconds: float = Field(default=10.0, gt=0)
 
 
+class RecordingSettings(BaseSettings):
+    """Stage 3 approved-reservation recording (written by the MCP file recorder)."""
+
+    # Path to the approved-reservations text file. Confined to the working directory
+    # tree by the recorder; the MCP server never takes a path from clients.
+    file_path: str = "data/reservations.txt"
+
+
 class AppSettings(BaseSettings):
     """General application / server settings."""
 
@@ -131,6 +139,7 @@ class Settings(BaseSettings):
 
     app: AppSettings = Field(default_factory=AppSettings)
     admin: AdminSettings = Field(default_factory=AdminSettings)
+    recording: RecordingSettings = Field(default_factory=RecordingSettings)
     llm: LLMSettings = Field(default_factory=LLMSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     vector_store: VectorStoreSettings = Field(default_factory=VectorStoreSettings)

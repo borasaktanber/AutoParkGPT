@@ -9,6 +9,7 @@ from autoparkgpt.domain.entities.reservation import Reservation, ReservationStat
 from autoparkgpt.domain.exceptions import ReservationError
 from autoparkgpt.domain.ports.llm import LLMPort
 from autoparkgpt.domain.ports.notifications import UserNotifierPort
+from autoparkgpt.domain.ports.reservation_recorder import ReservationRecorderPort
 from autoparkgpt.domain.ports.reservation_repository import ReservationRepositoryPort
 from autoparkgpt.domain.value_objects.chat import ChatMessage
 
@@ -28,9 +29,11 @@ class AdminApprovalService:
         self,
         reservation_repo: ReservationRepositoryPort,
         user_notifier: UserNotifierPort,
+        recorder: ReservationRecorderPort | None = None,
     ) -> None:
         self._repo = reservation_repo
         self._notifier = user_notifier
+        self._recorder = recorder
 
     def list_pending(self) -> list[Reservation]:
         return self._repo.list_by_status(ReservationStatus.PENDING_APPROVAL)
@@ -53,6 +56,15 @@ class AdminApprovalService:
         updated = reservation.approve() if approve else reservation.reject()
         self._repo.update(updated)
         self._notifier.notify_decision(updated)
+        # On approval, record the reservation to the durable file (Stage 3 / MCP).
+        # Best-effort: a recording failure must not roll back an approval already made.
+        if approve and self._recorder is not None:
+            try:
+                self._recorder.record(updated)
+            except Exception:  # pragma: no cover - defensive
+                _logger.warning(
+                    "reservation_record_failed", reservation_id=updated.id, exc_info=True
+                )
         _logger.info(
             "reservation_decided",
             reservation_id=updated.id,

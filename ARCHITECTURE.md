@@ -369,3 +369,60 @@ for a single long-running orchestration).
 Still **no Terraform** — Stage 2 adds only application endpoints and outbound webhooks, no
 new infrastructure. For production, the admin token belongs in a secrets manager and the
 webhook receivers should verify a shared secret/HMAC. Revisit IaC after Stage 4.
+
+---
+
+## 10. Stage 3 — MCP Server (approved-reservation record)
+
+When the administrator **approves** a reservation, it is written to a durable text file in
+the spec format, and that file is exposed via a **Model Context Protocol (MCP)** server.
+
+```
+Name | Car Number | Reservation Period | Approval Time
+Ada Lovelace | AB123CD | 2030-06-01T09:00:00+00:00 - 2030-06-01T13:00:00+00:00 | 2026-06-26T12:00:00+00:00
+```
+
+### Components
+
+- **`ReservationRecorderPort`** (domain) + **`FileReservationRecorder`** (infra) — the
+  append-only writer. Thread-safe (process-level lock), durable (`flush` + `fsync`), and
+  able to parse the file back for listing/finding.
+- **MCP server** (`autoparkgpt.mcp_server`, built on the official `mcp` SDK's `FastMCP`)
+  exposing four tools, backed by the recorder:
+  - `save_reservation(name, car_number, period_start, period_end)`
+  - `list_reservations()`
+  - `find_reservation(query)` — substring match on name or car number
+  - `health_check()`
+- **Integration:** `AdminApprovalService` records the reservation on **approve** (not
+  reject), best-effort so a disk error can't roll back an approval already made. The MCP
+  server reads/writes the same file, so external MCP clients (Claude Desktop, Stage 4
+  orchestration) see exactly what approvals wrote.
+
+### Decision: build our own MCP server
+
+The spec allows reusing an open-source file-writing MCP server, building a small one, or
+falling back to plain function-calling. A purpose-built `FastMCP` server is a few dozen
+lines, keeps the tool surface and the spec file-format under our control, and avoids
+trusting a third-party server with write access — so we build our own. Approval-time
+writing goes through the in-process recorder port (reliable, synchronous); the MCP server
+exposes the same file for external clients. (Wiring the approval agent as an MCP *client*
+is left to Stage 4's unified orchestration, which has an explicit MCP-communication node.)
+
+### Security ("resistant to unauthorized access")
+
+- **No client-controlled paths** — the file path is server-configured and resolved once;
+  tool callers cannot influence where data is written (no traversal).
+- **Input validation** — car number via the domain value object, ISO period parsing,
+  length limits, and rejection of the `|` separator in free-text fields (so a caller
+  can't forge record columns). `list`/`find` are read-only; writes are append-only.
+- **Transport** — runs over **stdio** (the standard MCP transport, launched by a trusted
+  host such as Claude Desktop). If exposed over HTTP, it must sit behind an
+  authenticating proxy/token (documented in the README).
+
+### Stage 3 infrastructure recommendation
+
+Still **no Terraform**. The MCP server is a local stdio process and the record is a file
+on disk. For production: put the records file on durable/backed-up storage (or swap the
+recorder adapter for an object-store/DB sink behind the same port), and if the MCP server
+is served over HTTP, front it with authentication. Multi-process writers would need an OS
+file lock rather than the in-process lock. Revisit IaC after Stage 4.

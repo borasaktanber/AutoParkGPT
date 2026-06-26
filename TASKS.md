@@ -103,13 +103,18 @@
 
 ---
 
-## Stage 3 — MCP Server  ☐ (gated)
+## Stage 3 — MCP Server  ☑
 
-- ☐ Evaluate open-source file-writing MCP server; else build minimal FastAPI MCP server
-- ☐ Tools: `save_reservation`, `list_reservations`, `find_reservation`, `health_check`
-- ☐ On approval, append reservation to text file: `Name | Car Number | Reservation Period | Approval Time`
-- ☐ Security: auth, input validation, path safety, resistance to unauthorized access
-- ☐ Tests, README, CI/CD + infra recommendations, design write-up, approval gate
+> 165 tests passing; ruff + `mypy --strict` clean. Verified end-to-end: approval writes
+> the record file, and the MCP tools read/write it.
+
+- ☑ Built our own MCP server on the official `mcp` SDK (`FastMCP`) — rationale in `ARCHITECTURE.md` §10
+- ☑ Tools: `save_reservation`, `list_reservations`, `find_reservation`, `health_check`
+- ☑ On approval, append to text file: `Name | Car Number | Reservation Period | Approval Time` (`FileReservationRecorder`, append-only, locked, fsync)
+- ☑ Security: no client-controlled paths, input validation/normalization, `|`-injection rejected, read-only list/find, stdio transport (HTTP behind auth)
+- ☑ Integration: `AdminApprovalService` records on approve (best-effort); DI-wired; `autoparkgpt-mcp` console entry point
+- ☑ Tests (recorder format/parse/find, MCP tools + validation, approve-records/reject-doesn't)
+- ☑ Docs (README MCP section + Claude Desktop config, `ARCHITECTURE.md` §10, `.env.example`), CI/CD + infra recommendations
 
 ---
 

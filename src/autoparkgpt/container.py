@@ -27,6 +27,7 @@ from autoparkgpt.infrastructure.persistence import (
     SqlDynamicDataRepository,
     SqlReservationRepository,
 )
+from autoparkgpt.infrastructure.recording import FileReservationRecorder
 from autoparkgpt.infrastructure.vectorstore import WeaviateVectorStore
 
 
@@ -54,6 +55,11 @@ class Container(containers.DeclarativeContainer):
     admin_notifier = providers.Singleton(build_admin_notifier, settings.provided.admin)
     user_notifier = providers.Singleton(build_user_notifier, settings.provided.admin)
 
+    # Stage 3 recorder: writes approved reservations to the MCP-managed file.
+    reservation_recorder = providers.Singleton(
+        FileReservationRecorder, settings.provided.recording.file_path
+    )
+
     # LangGraph in-memory checkpointer (per-process). For multi-process production,
     # swap for a Postgres-backed checkpointer (documented future enhancement).
     checkpointer = providers.Singleton(MemorySaver)
@@ -78,6 +84,7 @@ class Container(containers.DeclarativeContainer):
         AdminApprovalService,
         reservation_repo=reservation_repo,
         user_notifier=user_notifier,
+        recorder=reservation_recorder,
     )
     admin_agent = providers.Singleton(AdminApprovalAgent, llm=llm, service=approval_service)
 

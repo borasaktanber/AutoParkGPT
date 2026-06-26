@@ -15,7 +15,7 @@ from autoparkgpt.domain.entities.reservation import (
 from autoparkgpt.domain.exceptions import ReservationError
 from autoparkgpt.domain.value_objects import CarNumber, ReservationPeriod
 from autoparkgpt.infrastructure.persistence import InMemoryReservationRepository
-from tests.fakes import FakeLLM, RecordingUserNotifier
+from tests.fakes import FakeLLM, RecordingReservationRecorder, RecordingUserNotifier
 
 
 def _reservation(first: str = "Ada") -> Reservation:
@@ -63,6 +63,20 @@ def test_decide_unknown_reference_raises() -> None:
     service, _, _ = _service()
     with pytest.raises(ReservationError, match="No reservation found"):
         service.approve("deadbeef")
+
+
+def test_approve_records_reservation_reject_does_not() -> None:
+    repo = InMemoryReservationRepository()
+    recorder = RecordingReservationRecorder()
+    service = AdminApprovalService(repo, RecordingUserNotifier(), recorder=recorder)
+
+    approved = repo.add(_reservation("Ada"))
+    service.approve(approved.id[:8])
+    assert [r.id for r in recorder.recorded] == [approved.id]  # recorded on approve
+
+    rejected = repo.add(_reservation("Grace"))
+    service.reject(rejected.id[:8])
+    assert rejected.id not in [r.id for r in recorder.recorded]  # not recorded on reject
 
 
 def test_admin_agent_interprets_natural_language() -> None:
