@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "stage_**"]
   pull_request:
     branches: [main]
 
@@ -20,11 +20,14 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v3
 
-      - name: Set up Python
-        run: uv python install 3.12
+      - name: Create virtual environment
+        run: uv venv --python 3.12
+
+      - name: Add venv to PATH
+        run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
-        run: uv pip install --system ".[all,dev]"
+        run: uv pip install ".[all,dev]"
 
       - name: Ruff format check
         run: ruff format --check .
@@ -33,7 +36,7 @@ jobs:
         run: ruff check .
 
       - name: Mypy (strict)
-        run: mypy src
+        run: mypy src eval
 
       - name: Pytest + coverage
         run: pytest --cov=autoparkgpt --cov-report=xml --cov-report=term-missing
