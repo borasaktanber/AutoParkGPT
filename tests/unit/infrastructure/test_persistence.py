@@ -74,3 +74,29 @@ def test_in_memory_repository() -> None:
     assert repo.get(saved.id) == saved
     assert repo.get("missing") is None
     assert repo.list_all() == [saved]
+
+
+def test_sql_update_status_and_list_by_status(database: Database) -> None:
+    repo = SqlReservationRepository(database)
+    saved = repo.add(_reservation())
+    assert len(repo.list_by_status(ReservationStatus.PENDING_APPROVAL)) == 1
+    repo.update(saved.approve())
+    assert repo.get(saved.id).status is ReservationStatus.APPROVED
+    assert repo.list_by_status(ReservationStatus.PENDING_APPROVAL) == []
+    assert len(repo.list_by_status(ReservationStatus.APPROVED)) == 1
+
+
+def test_sql_find_by_reference(database: Database) -> None:
+    repo = SqlReservationRepository(database)
+    saved = repo.add(_reservation())
+    assert repo.find_by_reference(saved.id).id == saved.id
+    assert repo.find_by_reference(saved.id[:8]).id == saved.id
+    assert repo.find_by_reference("nomatch1") is None
+
+
+def test_in_memory_find_by_reference_and_status() -> None:
+    repo = InMemoryReservationRepository()
+    saved = repo.add(_reservation())
+    assert repo.find_by_reference(saved.id[:8]).id == saved.id
+    repo.update(saved.approve())
+    assert repo.list_by_status(ReservationStatus.APPROVED)[0].id == saved.id

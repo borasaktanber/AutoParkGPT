@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, Field
 
 from autoparkgpt.application.dto.chat import ChatResponse
+from autoparkgpt.domain.entities.reservation import Reservation
 
 
 class ChatRequest(BaseModel):
@@ -40,3 +41,35 @@ class HealthReply(BaseModel):
     status: str = "ok"
     name: str
     environment: str
+
+
+class ReservationView(BaseModel):
+    """Administrator-facing view of a reservation."""
+
+    id: str
+    reference: str
+    first_name: str
+    last_name: str
+    car_number: str
+    period_start: str
+    period_end: str
+    status: str
+
+    @classmethod
+    def from_entity(cls, reservation: Reservation) -> ReservationView:
+        return cls(
+            id=reservation.id,
+            reference=reservation.id[:8],
+            first_name=reservation.first_name,
+            last_name=reservation.last_name,
+            car_number=reservation.car_number.value,
+            period_start=reservation.period.start.isoformat(),
+            period_end=reservation.period.end.isoformat(),
+            status=reservation.status.value,
+        )
+
+
+class DecisionRequest(BaseModel):
+    """Free-text administrator decision interpreted by the admin agent."""
+
+    instruction: str = Field(min_length=1, description="e.g. 'approve' or 'looks good, reject'")

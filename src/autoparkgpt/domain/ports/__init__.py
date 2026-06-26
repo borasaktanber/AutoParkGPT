@@ -9,15 +9,18 @@ from autoparkgpt.domain.ports.dynamic_data import DynamicDataPort
 from autoparkgpt.domain.ports.embedding import EmbeddingPort
 from autoparkgpt.domain.ports.guardrail import GuardrailPort, GuardrailVerdict
 from autoparkgpt.domain.ports.llm import LLMPort
+from autoparkgpt.domain.ports.notifications import AdminNotifierPort, UserNotifierPort
 from autoparkgpt.domain.ports.reservation_repository import ReservationRepositoryPort
 from autoparkgpt.domain.ports.vector_store import VectorStorePort
 
 __all__ = [
+    "AdminNotifierPort",
     "DynamicDataPort",
     "EmbeddingPort",
     "GuardrailPort",
     "GuardrailVerdict",
     "LLMPort",
     "ReservationRepositoryPort",
+    "UserNotifierPort",
     "VectorStorePort",
 ]

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 import pytest
 
 from autoparkgpt.application.factory import build_chat_service
-from autoparkgpt.application.use_cases import ChatService
+from autoparkgpt.application.use_cases import AdminApprovalService, ChatService
 from autoparkgpt.domain.ports.guardrail import GuardrailPort
 from autoparkgpt.domain.value_objects.chat import ChatMessage
 from autoparkgpt.domain.value_objects.knowledge import RetrievedChunk
@@ -16,7 +16,19 @@ from autoparkgpt.infrastructure.config import AppSettings, GuardrailSettings, Re
 from autoparkgpt.infrastructure.guardrails import GuardrailPipeline
 from autoparkgpt.infrastructure.guardrails.patterns import SYSTEM_PROMPT_SENTINEL
 from autoparkgpt.infrastructure.persistence import InMemoryReservationRepository
-from tests.fakes import AllowAllGuardrail, FakeDynamicData, FakeEmbedding, FakeVectorStore
+from tests.fakes import (
+    AllowAllGuardrail,
+    FakeDynamicData,
+    FakeEmbedding,
+    FakeVectorStore,
+    RecordingAdminNotifier,
+    RecordingUserNotifier,
+)
+
+_FULL_RESERVATION = (
+    '{"first_name": "Ada", "last_name": "Lovelace", "car_number": "AB123CD", '
+    '"period_start": "2030-06-01T09:00:00+00:00", "period_end": "2030-06-01T13:00:00+00:00"}'
+)
 
 
 class ScriptedLLM:
@@ -57,6 +69,7 @@ def _service(
     chunks: Sequence[RetrievedChunk] = (),
     guardrail: GuardrailPort | None = None,
     repo: InMemoryReservationRepository | None = None,
+    admin_notifier: RecordingAdminNotifier | None = None,
 ) -> ChatService:
     return build_chat_service(
         llm=llm,
@@ -65,6 +78,7 @@ def _service(
         dynamic_data=FakeDynamicData(),
         guardrail=guardrail or AllowAllGuardrail(),
         reservation_repo=repo or InMemoryReservationRepository(),
+        admin_notifier=admin_notifier or RecordingAdminNotifier(),
         retrieval=RetrievalSettings(),
         app=AppSettings(),
         clock=lambda: _FIXED_NOW,
@@ -244,6 +258,44 @@ def test_empty_input_blocked(text: str) -> None:
     service = _service(ScriptedLLM(), guardrail=GuardrailPipeline(GuardrailSettings()))
     result = service.respond("s1", text)
     assert result.blocked
+
+
+def test_reservation_notifies_admin() -> None:
+    repo = InMemoryReservationRepository()
+    notifier = RecordingAdminNotifier()
+    service = _service(
+        ScriptedLLM(intent="RESERVE", slot_replies=[_FULL_RESERVATION]),
+        repo=repo,
+        admin_notifier=notifier,
+    )
+    result = service.respond("s1", "reserve a spot, all details attached")
+    assert result.reservation_id is not None
+    assert len(notifier.notified) == 1
+    assert notifier.notified[0].id == result.reservation_id
+
+
+def test_status_reports_pending_then_approved() -> None:
+    repo = InMemoryReservationRepository()
+    service = _service(ScriptedLLM(intent="RESERVE", slot_replies=[_FULL_RESERVATION]), repo=repo)
+    created = service.respond("booking", "reserve a spot, all details attached")
+    reference = created.reservation_id[:8]
+
+    pending = service.respond("query", f"what is the status of reservation {reference}?")
+    assert pending.intent == "STATUS"
+    assert "pending" in pending.message.lower()
+
+    # Admin approves out of band; decision flows back to the user via shared state.
+    AdminApprovalService(repo, RecordingUserNotifier()).approve(reference)
+    approved = service.respond("query2", f"is reservation {reference} approved?")
+    assert approved.intent == "STATUS"
+    assert "approved" in approved.message.lower()
+
+
+def test_status_without_reference_asks_for_it() -> None:
+    service = _service(ScriptedLLM(intent="OTHER"))
+    result = service.respond("s", "what is the status of my booking?")
+    assert result.intent == "STATUS"
+    assert "reference" in result.message.lower()
 
 
 def test_blocked_turn_has_no_stale_intent() -> None:

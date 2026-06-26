@@ -13,7 +13,13 @@ from autoparkgpt.container import Container
 from autoparkgpt.infrastructure.config import AppSettings, RetrievalSettings, Settings
 from autoparkgpt.infrastructure.persistence import InMemoryReservationRepository
 from autoparkgpt.interface.api import create_app
-from tests.fakes import AllowAllGuardrail, FakeDynamicData, FakeEmbedding, FakeVectorStore
+from tests.fakes import (
+    AllowAllGuardrail,
+    FakeDynamicData,
+    FakeEmbedding,
+    FakeVectorStore,
+    RecordingAdminNotifier,
+)
 from tests.unit.application.test_chat_graph import ScriptedLLM
 
 
@@ -28,6 +34,7 @@ def client() -> Iterator[TestClient]:
         dynamic_data=FakeDynamicData(),
         guardrail=AllowAllGuardrail(),
         reservation_repo=InMemoryReservationRepository(),
+        admin_notifier=RecordingAdminNotifier(),
         retrieval=RetrievalSettings(),
         app=AppSettings(environment="test"),
     )

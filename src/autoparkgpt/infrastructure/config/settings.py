@@ -90,6 +90,20 @@ class GuardrailSettings(BaseSettings):
     enable_output_leakage_scan: bool = True
 
 
+class AdminSettings(BaseSettings):
+    """Stage 2 human-in-the-loop administrator configuration.
+
+    ``api_token`` secures the admin REST endpoints; when unset, those endpoints reject
+    every request (fail-closed). Webhook URLs select the notifier adapter — when a URL is
+    set the webhook notifier is used, otherwise notifications are logged.
+    """
+
+    api_token: SecretStr | None = None
+    admin_webhook_url: str | None = None
+    user_webhook_url: str | None = None
+    notify_timeout_seconds: float = Field(default=10.0, gt=0)
+
+
 class AppSettings(BaseSettings):
     """General application / server settings."""
 
@@ -116,6 +130,7 @@ class Settings(BaseSettings):
     )
 
     app: AppSettings = Field(default_factory=AppSettings)
+    admin: AdminSettings = Field(default_factory=AdminSettings)
     llm: LLMSettings = Field(default_factory=LLMSettings)
     embedding: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
     vector_store: VectorStoreSettings = Field(default_factory=VectorStoreSettings)

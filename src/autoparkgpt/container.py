@@ -15,11 +15,13 @@ from dependency_injector import containers, providers
 from langgraph.checkpoint.memory import MemorySaver
 
 from autoparkgpt.application.factory import build_chat_service
+from autoparkgpt.application.use_cases import AdminApprovalAgent, AdminApprovalService
 from autoparkgpt.infrastructure.config import Settings, get_settings
 from autoparkgpt.infrastructure.embeddings import build_embedding
 from autoparkgpt.infrastructure.guardrails import GuardrailPipeline
 from autoparkgpt.infrastructure.llm import AnthropicLLMAdapter
 from autoparkgpt.infrastructure.logging import configure_logging
+from autoparkgpt.infrastructure.notifications import build_admin_notifier, build_user_notifier
 from autoparkgpt.infrastructure.persistence import (
     Database,
     SqlDynamicDataRepository,
@@ -48,11 +50,15 @@ class Container(containers.DeclarativeContainer):
     llm = providers.Singleton(AnthropicLLMAdapter.from_settings, settings.provided.llm)
     vector_store = providers.Singleton(WeaviateVectorStore.connect, settings.provided.vector_store)
 
+    # Stage 2 notifiers (human-in-the-loop approval channel).
+    admin_notifier = providers.Singleton(build_admin_notifier, settings.provided.admin)
+    user_notifier = providers.Singleton(build_user_notifier, settings.provided.admin)
+
     # LangGraph in-memory checkpointer (per-process). For multi-process production,
     # swap for a Postgres-backed checkpointer (documented future enhancement).
     checkpointer = providers.Singleton(MemorySaver)
 
-    # --- application use case ---
+    # --- application use cases ---
     chat_service = providers.Singleton(
         build_chat_service,
         llm=llm,
@@ -61,10 +67,19 @@ class Container(containers.DeclarativeContainer):
         dynamic_data=dynamic_data,
         guardrail=guardrail,
         reservation_repo=reservation_repo,
+        admin_notifier=admin_notifier,
         retrieval=settings.provided.retrieval,
         app=settings.provided.app,
         checkpointer=checkpointer,
     )
+
+    # Stage 2 administrator agent (second agent) + its approval service.
+    approval_service = providers.Singleton(
+        AdminApprovalService,
+        reservation_repo=reservation_repo,
+        user_notifier=user_notifier,
+    )
+    admin_agent = providers.Singleton(AdminApprovalAgent, llm=llm, service=approval_service)
 
 
 def build_container() -> Container:

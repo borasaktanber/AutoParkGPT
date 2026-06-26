@@ -26,6 +26,7 @@ from autoparkgpt.domain.entities.reservation import (
     Reservation,
     ReservationDraft,
     ReservationSlot,
+    ReservationStatus,
 )
 from autoparkgpt.domain.exceptions import (
     InvalidCarNumberError,
@@ -36,6 +37,7 @@ from autoparkgpt.domain.ports.dynamic_data import DynamicDataPort
 from autoparkgpt.domain.ports.embedding import EmbeddingPort
 from autoparkgpt.domain.ports.guardrail import GuardrailPort
 from autoparkgpt.domain.ports.llm import LLMPort
+from autoparkgpt.domain.ports.notifications import AdminNotifierPort
 from autoparkgpt.domain.ports.reservation_repository import ReservationRepositoryPort
 from autoparkgpt.domain.ports.vector_store import VectorStorePort
 from autoparkgpt.domain.value_objects.car_number import CarNumber
@@ -49,6 +51,10 @@ _HISTORY_WINDOW = 12  # messages of context passed to the model
 
 _RESERVE_INTENT_RE = re.compile(r"\b(reserv\w*|book\w*)\b", re.IGNORECASE)
 _CANCEL_RE = re.compile(r"\b(cancel|nevermind|never mind|stop|forget it)\b", re.IGNORECASE)
+_STATUS_RE = re.compile(r"\b(status|approved|rejected|reference|confirm\w*)\b", re.IGNORECASE)
+# A reservation reference is a run of >=6 hex chars that contains at least one digit
+# (so all-letter English words like "facade"/"decade" are not mistaken for a reference).
+_REFERENCE_RE = re.compile(r"\b[0-9a-fA-F]{6,}\b")
 _MAX_NAME_LEN = 50
 _PERIOD_DATETIME_COUNT = 2
 
@@ -63,6 +69,7 @@ class GraphNodes:
     dynamic_data: DynamicDataPort
     guardrail: GuardrailPort
     reservation_repo: ReservationRepositoryPort
+    admin_notifier: AdminNotifierPort
     retrieval: RetrievalSettings
     app: AppSettings
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
@@ -93,9 +100,17 @@ class GraphNodes:
         in_reservation = state.get("awaiting_slot") is not None or (
             draft != ReservationDraft() and not draft.is_complete
         )
-        if in_reservation or _RESERVE_INTENT_RE.search(message):
-            # Deterministic routing: stay in (or enter) the reservation flow without
-            # depending on the LLM classifier, which previously caused desyncs.
+        # Mid-reservation slot-filling always wins (a terse answer must not be re-routed).
+        if in_reservation:
+            return {"intent": Intent.RESERVE}
+        # A status check (the admin decision flowing back) is recognized by an explicit
+        # status keyword or a reservation reference. Checked before the reserve keyword
+        # because "status of my booking/reservation" also matches the reserve pattern.
+        if _STATUS_RE.search(message) or _find_reference(message) is not None:
+            return {"intent": Intent.STATUS}
+        if _RESERVE_INTENT_RE.search(message):
+            # Deterministic routing: enter the reservation flow without depending on the
+            # LLM classifier, which previously caused desyncs.
             return {"intent": Intent.RESERVE}
         return {"intent": classify_intent(self.llm, message)}
 
@@ -206,12 +221,32 @@ class GraphNodes:
 
         saved = self.reservation_repo.add(reservation)
         _logger.info("reservation_created", reservation_id=saved.id)
+        # Notify the administrator that a reservation is awaiting review (Stage 2).
+        # Best-effort: a notification failure must not fail the reservation.
+        try:
+            self.admin_notifier.notify_new_reservation(saved)
+        except Exception:  # pragma: no cover - defensive; adapters already swallow errors
+            _logger.warning("admin_notify_failed", reservation_id=saved.id, exc_info=True)
         return {
             "draft": ReservationDraft(),
             "awaiting_slot": None,
             "reservation_id": saved.id,
             "response": _confirmation(saved),
         }
+
+    def reservation_status(self, state: ConversationState) -> ConversationState:
+        reference = _find_reference(state["user_input"])
+        if reference is None:
+            return {
+                "response": (
+                    "Sure — what's your reservation reference? It's the 8-character code "
+                    "from your confirmation (e.g. 2e74709e)."
+                )
+            }
+        reservation = self.reservation_repo.find_by_reference(reference)
+        if reservation is None:
+            return {"response": f"I couldn't find a reservation with reference '{reference}'."}
+        return {"response": _status_message(reservation)}
 
     def output_guard(self, state: ConversationState) -> ConversationState:
         response = state.get("response", "")
@@ -290,6 +325,34 @@ class GraphNodes:
             case _:
                 pass
         return draft, None
+
+
+def _find_reference(text: str) -> str | None:
+    """Return the first hex token (>=6 chars, containing a digit) — a reservation ref."""
+
+    for match in _REFERENCE_RE.finditer(text):
+        token = match.group(0)
+        if any(ch.isdigit() for ch in token):
+            return token
+    return None
+
+
+def _status_message(reservation: Reservation) -> str:
+    ref = reservation.id[:8]
+    match reservation.status:
+        case ReservationStatus.APPROVED:
+            return f"Good news — reservation {ref} has been approved. See you at the garage!"
+        case ReservationStatus.REJECTED:
+            return (
+                f"Unfortunately reservation {ref} was rejected. Please contact the office "
+                "or make a new reservation."
+            )
+        case ReservationStatus.PENDING_APPROVAL:
+            return f"Reservation {ref} is still pending administrator approval."
+        case ReservationStatus.CANCELLED:
+            return f"Reservation {ref} was cancelled."
+        case _:
+            return f"Reservation {ref} is currently '{reservation.status.value}'."
 
 
 def _as_name(text: str) -> str | None:

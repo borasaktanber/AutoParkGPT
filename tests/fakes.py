@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
+from autoparkgpt.domain.entities.reservation import Reservation
 from autoparkgpt.domain.ports.guardrail import GuardrailVerdict
 from autoparkgpt.domain.value_objects.chat import ChatMessage
 from autoparkgpt.domain.value_objects.dynamic_data import (
@@ -113,3 +114,23 @@ class AllowAllGuardrail:
 
     def scan_output(self, text: str) -> GuardrailVerdict:
         return GuardrailVerdict.ok()
+
+
+class RecordingAdminNotifier:
+    """AdminNotifierPort double that records the reservations it was asked to notify."""
+
+    def __init__(self) -> None:
+        self.notified: list[Reservation] = []
+
+    def notify_new_reservation(self, reservation: Reservation) -> None:
+        self.notified.append(reservation)
+
+
+class RecordingUserNotifier:
+    """UserNotifierPort double that records decision notifications."""
+
+    def __init__(self) -> None:
+        self.decisions: list[Reservation] = []
+
+    def notify_decision(self, reservation: Reservation) -> None:
+        self.decisions.append(reservation)

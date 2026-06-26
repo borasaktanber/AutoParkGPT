@@ -29,6 +29,7 @@ class Intent(StrEnum):
     INFO = "INFO"
     DYNAMIC = "DYNAMIC"
     RESERVE = "RESERVE"
+    STATUS = "STATUS"
     OTHER = "OTHER"
 
 

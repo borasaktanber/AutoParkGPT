@@ -41,6 +41,7 @@ def build_chat_graph(nodes: GraphNodes, checkpointer: Any | None = None) -> Any:
     graph.add_node("retrieve", nodes.retrieve)
     graph.add_node("fetch_dynamic", nodes.fetch_dynamic)
     graph.add_node("reserve", nodes.reserve)
+    graph.add_node("reservation_status", nodes.reservation_status)
     graph.add_node("generate", nodes.generate)
     graph.add_node("output_guard", nodes.output_guard)
 
@@ -57,6 +58,7 @@ def build_chat_graph(nodes: GraphNodes, checkpointer: Any | None = None) -> Any:
             Intent.INFO.value: "retrieve",
             Intent.DYNAMIC.value: "fetch_dynamic",
             Intent.RESERVE.value: "reserve",
+            Intent.STATUS.value: "reservation_status",
             Intent.OTHER.value: "generate",
         },
     )
@@ -64,6 +66,7 @@ def build_chat_graph(nodes: GraphNodes, checkpointer: Any | None = None) -> Any:
     graph.add_edge("fetch_dynamic", "generate")
     graph.add_edge("generate", "output_guard")
     graph.add_edge("reserve", "output_guard")
+    graph.add_edge("reservation_status", "output_guard")
     graph.add_edge("output_guard", END)
 
     return graph.compile(checkpointer=checkpointer)

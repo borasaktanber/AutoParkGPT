@@ -14,6 +14,7 @@ from autoparkgpt.application.use_cases import ChatService
 from autoparkgpt.container import Container, build_container
 from autoparkgpt.domain.exceptions import DomainError
 from autoparkgpt.infrastructure.persistence import seed_dynamic_data
+from autoparkgpt.interface.api.admin import build_admin_router
 from autoparkgpt.interface.api.schemas import ChatReply, ChatRequest, HealthReply
 
 _logger = structlog.get_logger(__name__)
@@ -72,6 +73,8 @@ def create_app(container: Container | None = None) -> FastAPI:
     ) -> ChatReply:
         response = service.respond(payload.session_id, payload.message)
         return ChatReply.from_response(response)
+
+    app.include_router(build_admin_router())
 
     return app
 

@@ -6,10 +6,10 @@ parking questions (general info, working hours, prices, availability, location) 
 interactively collects reservation requests, behind a layered Clean Architecture with a
 security guardrail pipeline.
 
-> **Project status:** **Stage 1 (RAG chatbot) complete.** Stages 2–4 (admin
-> human-in-the-loop, MCP server, unified LangGraph orchestration) are planned — see
-> [`TASKS.md`](TASKS.md). Full design rationale is in [`ARCHITECTURE.md`](ARCHITECTURE.md);
-> evaluation methodology in [`EVALUATION.md`](EVALUATION.md).
+> **Project status:** **Stages 1 & 2 complete** — RAG chatbot + human-in-the-loop
+> administrator approval. Stages 3–4 (MCP server, unified LangGraph orchestration) are
+> planned — see [`TASKS.md`](TASKS.md). Full design rationale is in
+> [`ARCHITECTURE.md`](ARCHITECTURE.md); evaluation methodology in [`EVALUATION.md`](EVALUATION.md).
 
 ---
 
@@ -99,6 +99,34 @@ curl -s localhost:8000/chat -H 'content-type: application/json' \
 
 Conversation state (history + in-progress reservation) is keyed by `session_id`.
 
+### Administrator approval (Stage 2)
+
+When a reservation is created it enters `pending_approval` and an administrator is
+notified. Admin endpoints are secured by `X-Admin-Token` (set `AUTOPARK_ADMIN__API_TOKEN`;
+endpoints fail closed if it's unset). The decision flows back to the user — via a webhook
+(`AUTOPARK_ADMIN__USER_WEBHOOK_URL`) and by asking the chatbot about the reservation
+reference.
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/admin/reservations` | List pending reservations |
+| `POST` | `/admin/reservations/{ref}/approve` | Approve |
+| `POST` | `/admin/reservations/{ref}/reject` | Reject |
+| `POST` | `/admin/reservations/{ref}/decision` | Approve/reject from a natural-language instruction (LLM admin agent) |
+
+```bash
+TOKEN=...   # AUTOPARK_ADMIN__API_TOKEN
+curl -s localhost:8000/admin/reservations -H "X-Admin-Token: $TOKEN"
+curl -s -X POST localhost:8000/admin/reservations/675e1e8a/approve -H "X-Admin-Token: $TOKEN"
+# natural-language decision:
+curl -s -X POST localhost:8000/admin/reservations/675e1e8a/decision \
+  -H "X-Admin-Token: $TOKEN" -H 'content-type: application/json' \
+  -d '{"instruction":"looks good, approve it"}'
+```
+
+Then the user can ask the chatbot: *"What's the status of reservation 675e1e8a?"* →
+"…has been approved."
+
 ### CLI
 
 ```bash
@@ -124,6 +152,9 @@ via the environment only and never committed.**
 | `AUTOPARK_SQL__URL` | SQLite file | SQL DB connection string |
 | `AUTOPARK_RETRIEVAL__TOP_K` | `4` | RAG retrieval depth |
 | `AUTOPARK_RETRIEVAL__HYBRID_ALPHA` | `0.5` | dense vs keyword weighting |
+| `AUTOPARK_ADMIN__API_TOKEN` | — | secures `/admin` endpoints (fail-closed if unset) |
+| `AUTOPARK_ADMIN__ADMIN_WEBHOOK_URL` | — | optional: notify admin of new reservations |
+| `AUTOPARK_ADMIN__USER_WEBHOOK_URL` | — | optional: notify user of the decision |
 
 ---
 

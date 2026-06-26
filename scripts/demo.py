@@ -36,6 +36,7 @@ from autoparkgpt.infrastructure.config import (
     SQLSettings,
 )
 from autoparkgpt.infrastructure.guardrails import GuardrailPipeline
+from autoparkgpt.infrastructure.notifications import LoggingAdminNotifier
 from autoparkgpt.infrastructure.persistence import Database, SqlReservationRepository
 from autoparkgpt.infrastructure.persistence.dynamic_data import StaticDynamicDataRepository
 from autoparkgpt.infrastructure.vectorstore import load_documents
@@ -149,6 +150,7 @@ def main() -> None:
         dynamic_data=StaticDynamicDataRepository(),
         guardrail=GuardrailPipeline(GuardrailSettings()),
         reservation_repo=repo,
+        admin_notifier=LoggingAdminNotifier(),
         retrieval=RetrievalSettings(),
         app=AppSettings(),
         clock=lambda: datetime(2030, 1, 1, tzinfo=UTC),

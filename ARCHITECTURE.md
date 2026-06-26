@@ -315,3 +315,57 @@ there is no cloud footprint to provision. Recommendation: defer IaC until a targ
 deployment environment exists (e.g. managed Postgres + a managed/standalone Weaviate +
 a container runtime). Revisit at the end of Stage 4 in the system-testing phase. This
 will be restated in each stage's deliverables as the spec requires.
+
+---
+
+## 9. Stage 2 — Human-in-the-Loop Administrator Approval
+
+Stage 2 adds a second agent that reviews reservations and an approval workflow that
+routes the decision back to the user. The chosen administrator channel is **REST API +
+webhook** (simplest to run/test locally; other channels — email, Slack — sit behind the
+same notifier ports).
+
+### Reservation lifecycle
+
+```mermaid
+flowchart LR
+    A[User books via chatbot] --> B[Reservation created<br/>status: PENDING_APPROVAL]
+    B --> C[AdminNotifier: alert administrator]
+    C --> D{Administrator review<br/>REST: approve / reject<br/>or NL via admin agent}
+    D -->|approve| E[status: APPROVED]
+    D -->|reject| F[status: REJECTED]
+    E --> G[UserNotifier: notify user]
+    F --> G
+    G --> H[User learns decision<br/>via webhook or by asking the bot]
+```
+
+### Components & seams
+
+- **Two notifier ports** (`AdminNotifierPort`, `UserNotifierPort`) with **logging**
+  (default) and **webhook** adapters, chosen by config. Webhook delivery is best-effort —
+  a notification failure never blocks reservation creation or a decision.
+- **`AdminApprovalService`** (the second agent's core): loads a reservation by reference,
+  applies the `approve()` / `reject()` domain transition (which rejects non-pending
+  reservations), persists it, and notifies the user.
+- **`AdminApprovalAgent`** — an LLM-backed wrapper that interprets a natural-language
+  administrator instruction ("looks good, approve it") into an approve/reject action.
+- **Secured admin REST router** (`/admin/...`): list pending, approve, reject, and a
+  natural-language `decision` endpoint. Authenticated by a shared `X-Admin-Token`
+  (constant-time compared); **fails closed** when no token is configured.
+- **Decision flows back to the first agent** two ways: a `UserNotifierPort` push
+  (webhook) and a new `STATUS` conversation intent — the user asks the chatbot about a
+  reference and it reports the current status from the shared repository.
+
+### Why a service + LLM agent rather than a mid-turn LangGraph `interrupt`
+
+The chatbot is turn-based over REST; admin approval is asynchronous and out-of-band, so a
+mid-turn `interrupt` doesn't fit the request/response model. Decoupling via a shared
+repository + notifier ports is cleaner and production-realistic, and keeps Stage 4 free to
+fold both agents into one unified LangGraph (where an `interrupt` node is the natural fit
+for a single long-running orchestration).
+
+### Stage 2 infrastructure recommendation
+
+Still **no Terraform** — Stage 2 adds only application endpoints and outbound webhooks, no
+new infrastructure. For production, the admin token belongs in a secrets manager and the
+webhook receivers should verify a shared secret/HMAC. Revisit IaC after Stage 4.

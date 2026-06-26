@@ -12,6 +12,7 @@ from autoparkgpt.domain.entities import (
     ReservationSlot,
     ReservationStatus,
 )
+from autoparkgpt.domain.exceptions import ReservationError
 from autoparkgpt.domain.value_objects import CarNumber, ReservationPeriod
 
 
@@ -58,6 +59,32 @@ def test_incomplete_draft_cannot_build() -> None:
     draft = ReservationDraft(first_name="Ada")
     with pytest.raises(ValueError, match="incomplete draft"):
         draft.to_reservation()
+
+
+def test_approve_and_reject_transitions() -> None:
+    draft = ReservationDraft(
+        first_name="Ada",
+        last_name="Lovelace",
+        car_number=CarNumber.parse("AB123CD"),
+        period=_period(),
+    )
+    reservation = draft.to_reservation()
+    assert reservation.approve().status is ReservationStatus.APPROVED
+    assert reservation.reject().status is ReservationStatus.REJECTED
+
+
+def test_cannot_decide_non_pending_reservation() -> None:
+    draft = ReservationDraft(
+        first_name="Ada",
+        last_name="Lovelace",
+        car_number=CarNumber.parse("AB123CD"),
+        period=_period(),
+    )
+    approved = draft.to_reservation().approve()
+    with pytest.raises(ReservationError, match="not pending"):
+        approved.approve()
+    with pytest.raises(ReservationError, match="not pending"):
+        approved.reject()
 
 
 def test_with_status_returns_copy() -> None:

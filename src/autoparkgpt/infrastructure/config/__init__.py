@@ -1,6 +1,7 @@
 """Configuration loaded from the environment (no hardcoded secrets)."""
 
 from autoparkgpt.infrastructure.config.settings import (
+    AdminSettings,
     AppSettings,
     EmbeddingProvider,
     EmbeddingSettings,
@@ -14,6 +15,7 @@ from autoparkgpt.infrastructure.config.settings import (
 )
 
 __all__ = [
+    "AdminSettings",
     "AppSettings",
     "EmbeddingProvider",
     "EmbeddingSettings",

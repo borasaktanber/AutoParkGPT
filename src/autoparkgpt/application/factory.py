@@ -15,6 +15,7 @@ from autoparkgpt.domain.ports.dynamic_data import DynamicDataPort
 from autoparkgpt.domain.ports.embedding import EmbeddingPort
 from autoparkgpt.domain.ports.guardrail import GuardrailPort
 from autoparkgpt.domain.ports.llm import LLMPort
+from autoparkgpt.domain.ports.notifications import AdminNotifierPort
 from autoparkgpt.domain.ports.reservation_repository import ReservationRepositoryPort
 from autoparkgpt.domain.ports.vector_store import VectorStorePort
 from autoparkgpt.infrastructure.config import AppSettings, RetrievalSettings
@@ -28,6 +29,7 @@ def build_chat_service(  # noqa: PLR0913 - wiring factory binds all ports + sett
     dynamic_data: DynamicDataPort,
     guardrail: GuardrailPort,
     reservation_repo: ReservationRepositoryPort,
+    admin_notifier: AdminNotifierPort,
     retrieval: RetrievalSettings,
     app: AppSettings,
     clock: Callable[[], datetime] | None = None,
@@ -42,6 +44,7 @@ def build_chat_service(  # noqa: PLR0913 - wiring factory binds all ports + sett
         dynamic_data=dynamic_data,
         guardrail=guardrail,
         reservation_repo=reservation_repo,
+        admin_notifier=admin_notifier,
         retrieval=retrieval,
         app=app,
         clock=clock or (lambda: datetime.now(UTC)),

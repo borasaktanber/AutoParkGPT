@@ -30,6 +30,7 @@ def make_graph() -> Any:
         dynamic_data=container.dynamic_data(),
         guardrail=container.guardrail(),
         reservation_repo=container.reservation_repo(),
+        admin_notifier=container.admin_notifier(),
         retrieval=settings.retrieval,
         app=settings.app,
     )

@@ -8,6 +8,7 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from autoparkgpt.domain.exceptions import ReservationError
 from autoparkgpt.domain.value_objects.car_number import CarNumber
 from autoparkgpt.domain.value_objects.reservation_period import ReservationPeriod
 
@@ -61,6 +62,25 @@ class Reservation(BaseModel):
         """Return a copy with a new lifecycle status."""
 
         return self.model_copy(update={"status": status})
+
+    def approve(self) -> Reservation:
+        """Transition a pending reservation to APPROVED."""
+
+        self._ensure_pending()
+        return self.with_status(ReservationStatus.APPROVED)
+
+    def reject(self) -> Reservation:
+        """Transition a pending reservation to REJECTED."""
+
+        self._ensure_pending()
+        return self.with_status(ReservationStatus.REJECTED)
+
+    def _ensure_pending(self) -> None:
+        if self.status is not ReservationStatus.PENDING_APPROVAL:
+            raise ReservationError(
+                f"Reservation {self.id} is '{self.status.value}', not pending approval; "
+                "only pending reservations can be approved or rejected.",
+            )
 
 
 class ReservationDraft(BaseModel):

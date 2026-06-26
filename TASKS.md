@@ -86,14 +86,20 @@
 
 ---
 
-## Stage 2 — Human-in-the-Loop Admin Agent  ☐ (gated)
+## Stage 2 — Human-in-the-Loop Admin Agent  ☑
 
-- ☐ Second agent for administrator interaction
-- ☐ Reservation lifecycle: Created → Pending → Review → Approved/Rejected → Notify → Continue
-- ☐ Communication channel (decision recorded in design; default REST/webhook, email optional)
-- ☐ LangGraph `interrupt` for human approval; decision routed back to first agent
-- ☐ State persistence of pending reservations
-- ☐ Tests, README, CI/CD + infra recommendations, design write-up, approval gate
+> 145 tests passing at 92% coverage; ruff + `mypy --strict` clean. Verified end-to-end
+> against the live stack (real Claude + Weaviate + SQLite) and via the secured REST API.
+
+- ☑ Second agent for administrator interaction (`AdminApprovalService` + LLM `AdminApprovalAgent`)
+- ☑ Reservation lifecycle: Created → Pending → Review → Approved/Rejected → Notify → user can query status
+- ☑ Communication channel: **REST API + webhook** (per project decision); `AdminNotifierPort` / `UserNotifierPort` with logging (default) + webhook adapters
+- ☑ Decision routed back to the first agent: `UserNotifierPort` push + new `STATUS` chat intent reading shared state
+- ☑ Domain transitions (`approve()`/`reject()` reject non-pending) + repo `update`/`find_by_reference`/`list_by_status` (SQL + in-memory)
+- ☑ Secured admin REST router (`/admin/reservations` list/approve/reject/decision), `X-Admin-Token`, fail-closed
+- ☑ Tests (domain, service, agent, notifiers, repo, status flow, admin endpoints + auth)
+- ☑ Docs (README admin section, `ARCHITECTURE.md` §9 + lifecycle diagram), CI/CD + infra recommendations
+- ☑ Note: a mid-turn LangGraph `interrupt` is deferred to Stage 4's unified orchestration (rationale in `ARCHITECTURE.md` §9)
 
 ---
 

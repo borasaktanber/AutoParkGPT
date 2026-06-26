@@ -52,6 +52,19 @@ User message: {message}
 """
 
 
+ADMIN_DECISION_PROMPT = """\
+An administrator is reviewing a pending parking reservation and has written the
+instruction below. Classify their intent as exactly one of:
+- APPROVE: they want to approve / accept / confirm the reservation.
+- REJECT: they want to reject / decline / deny the reservation.
+- UNCLEAR: the instruction is ambiguous or unrelated.
+
+Respond with ONLY the single word (APPROVE, REJECT, or UNCLEAR).
+
+Administrator instruction: {instruction}
+"""
+
+
 def build_answer_prompt(context: str) -> str:
     """Build the per-turn instruction that frames the retrieved/dynamic context."""
 
