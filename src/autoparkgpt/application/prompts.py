@@ -53,13 +53,19 @@ User message: {message}
 
 
 ADMIN_DECISION_PROMPT = """\
-An administrator is reviewing a pending parking reservation and has written the
-instruction below. Classify their intent as exactly one of:
-- APPROVE: they want to approve / accept / confirm the reservation.
-- REJECT: they want to reject / decline / deny the reservation.
-- UNCLEAR: the instruction is ambiguous or unrelated.
+An administrator is reviewing a pending parking reservation and wrote the instruction
+below. Decide what they want:
+- APPROVE: any affirmation, acceptance, or positive judgment — e.g. "approve", "accept",
+  "confirm", "ok", "okay", "yes", "sure", "fine", "good", "looks good", "suitable",
+  "acceptable", "go ahead", "proceed", "all good", "lgtm", or a thumbs-up.
+- REJECT: any refusal or negative judgment — e.g. "reject", "decline", "deny", "no",
+  "not ok", "not acceptable", "unsuitable", "looks wrong", "cancel it".
+- UNCLEAR: only when the message expresses no decision at all (it's empty, a question,
+  or unrelated to approving/rejecting).
 
-Respond with ONLY the single word (APPROVE, REJECT, or UNCLEAR).
+Lean toward APPROVE or REJECT whenever there is any discernible sentiment; reserve
+UNCLEAR for genuinely indeterminate messages. Respond with ONLY the single word
+(APPROVE, REJECT, or UNCLEAR).
 
 Administrator instruction: {instruction}
 """
