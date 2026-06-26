@@ -1,0 +1,65 @@
+# Local development / demo stack: app + Weaviate + PostgreSQL.
+# Secrets are passed via the environment (see .env) — never baked into the image.
+
+services:
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.27.0
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+      # We supply our own vectors (local/Voyage embeddings) — no vectorizer module.
+      DEFAULT_VECTORIZER_MODULE: none
+      ENABLE_MODULES: ""
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/v1/.well-known/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-autopark}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-autopark}
+      POSTGRES_DB: ${POSTGRES_DB:-autopark}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-autopark}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    depends_on:
+      weaviate:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      AUTOPARK_APP__ENVIRONMENT: production
+      AUTOPARK_VECTOR_STORE__HOST: weaviate
+      AUTOPARK_SQL__URL: postgresql+psycopg://${POSTGRES_USER:-autopark}:${POSTGRES_PASSWORD:-autopark}@postgres:5432/${POSTGRES_DB:-autopark}
+      # Secret — must be provided in the environment / .env, never committed.
+      AUTOPARK_LLM__API_KEY: ${AUTOPARK_LLM__API_KEY:-}
+      AUTOPARK_LLM__MODEL: ${AUTOPARK_LLM__MODEL:-claude-haiku-4-5}
+
+volumes:
+  weaviate_data:
+  postgres_data:
