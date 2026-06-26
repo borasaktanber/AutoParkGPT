@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from autoparkgpt.application.extraction import Intent, classify_intent, extract_slots
 from tests.fakes import FakeLLM
 
@@ -28,3 +30,11 @@ def test_extract_slots_handles_invalid_json() -> None:
 def test_extract_slots_ignores_unknown_and_empty() -> None:
     reply = '{"first_name": "", "last_name": "Doe", "evil": "x"}'
     assert extract_slots(FakeLLM([reply]), "x") == {"last_name": "Doe"}
+
+
+def test_extract_slots_injects_current_date_for_relative_dates() -> None:
+    llm = FakeLLM(["{}"])
+    extract_slots(llm, "today at 19:00", now=datetime(2026, 6, 26, 12, 0, tzinfo=UTC))
+    sent = llm.calls[-1][-1].content
+    assert "2026-06-26" in sent  # the model is told what 'today' is
+    assert "today" in sent.lower()

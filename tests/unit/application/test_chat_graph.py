@@ -291,6 +291,23 @@ def test_status_reports_pending_then_approved() -> None:
     assert "approved" in approved.message.lower()
 
 
+def test_status_followup_uses_remembered_reference() -> None:
+    # After booking, the user can ask about status without re-typing the reference, and
+    # a bare "check again" must re-read live state (not parrot stale history).
+    repo = InMemoryReservationRepository()
+    service = _service(ScriptedLLM(intent="RESERVE", slot_replies=[_FULL_RESERVATION]), repo=repo)
+    created = service.respond("sess", "reserve a spot, all details attached")
+
+    pending = service.respond("sess", "is my reservation approved?")
+    assert pending.intent == "STATUS"
+    assert "pending" in pending.message.lower()
+
+    AdminApprovalService(repo, RecordingUserNotifier()).approve(created.reservation_id[:8])
+    again = service.respond("sess", "can you check again?")
+    assert again.intent == "STATUS"
+    assert "approved" in again.message.lower()
+
+
 def test_status_without_reference_asks_for_it() -> None:
     service = _service(ScriptedLLM(intent="OTHER"))
     result = service.respond("s", "what is the status of my booking?")

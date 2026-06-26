@@ -51,7 +51,12 @@ _HISTORY_WINDOW = 12  # messages of context passed to the model
 
 _RESERVE_INTENT_RE = re.compile(r"\b(reserv\w*|book\w*)\b", re.IGNORECASE)
 _CANCEL_RE = re.compile(r"\b(cancel|nevermind|never mind|stop|forget it)\b", re.IGNORECASE)
-_STATUS_RE = re.compile(r"\b(status|approved|rejected|reference|confirm\w*)\b", re.IGNORECASE)
+_STATUS_RE = re.compile(
+    r"\b(status|approv\w*|reject\w*|reference|confirm\w*|pending)\b", re.IGNORECASE
+)
+# A follow-up to a prior status check ("check again", "any update yet?") — only treated
+# as a status query when the session already has a remembered reservation reference.
+_FOLLOWUP_RE = re.compile(r"\b(again|now|yet|update|news|check)\b", re.IGNORECASE)
 # A reservation reference is a run of >=6 hex chars that contains at least one digit
 # (so all-letter English words like "facade"/"decade" are not mistaken for a reference).
 _REFERENCE_RE = re.compile(r"\b[0-9a-fA-F]{6,}\b")
@@ -104,9 +109,11 @@ class GraphNodes:
         if in_reservation:
             return {"intent": Intent.RESERVE}
         # A status check (the admin decision flowing back) is recognized by an explicit
-        # status keyword or a reservation reference. Checked before the reserve keyword
-        # because "status of my booking/reservation" also matches the reserve pattern.
-        if _STATUS_RE.search(message) or _find_reference(message) is not None:
+        # status keyword, a reservation reference, or a follow-up when we already know
+        # which reservation the user means. Checked before the reserve keyword because
+        # "status of my booking/reservation" also matches the reserve pattern.
+        is_followup = state.get("last_reference") is not None and _FOLLOWUP_RE.search(message)
+        if _STATUS_RE.search(message) or _find_reference(message) is not None or is_followup:
             return {"intent": Intent.STATUS}
         if _RESERVE_INTENT_RE.search(message):
             # Deterministic routing: enter the reservation flow without depending on the
@@ -186,7 +193,12 @@ class GraphNodes:
             }
 
         # 1) Structured extraction (handles rich, multi-field messages).
-        slots = extract_slots(self.llm, message, awaiting=awaiting.value if awaiting else None)
+        slots = extract_slots(
+            self.llm,
+            message,
+            awaiting=awaiting.value if awaiting else None,
+            now=self.clock(),
+        )
         draft, error = self._apply_slots(draft, slots)
         if error is not None:
             return {"draft": draft, "awaiting_slot": awaiting, "response": error}
@@ -231,11 +243,13 @@ class GraphNodes:
             "draft": ReservationDraft(),
             "awaiting_slot": None,
             "reservation_id": saved.id,
+            "last_reference": saved.id,  # so "is it approved yet?" works without re-typing
             "response": _confirmation(saved),
         }
 
     def reservation_status(self, state: ConversationState) -> ConversationState:
-        reference = _find_reference(state["user_input"])
+        # Use an explicit reference if given, else the one remembered from this session.
+        reference = _find_reference(state["user_input"]) or state.get("last_reference")
         if reference is None:
             return {
                 "response": (
@@ -243,10 +257,11 @@ class GraphNodes:
                     "from your confirmation (e.g. 2e74709e)."
                 )
             }
+        # Always re-read live state so a just-changed decision is reflected immediately.
         reservation = self.reservation_repo.find_by_reference(reference)
         if reservation is None:
             return {"response": f"I couldn't find a reservation with reference '{reference}'."}
-        return {"response": _status_message(reservation)}
+        return {"response": _status_message(reservation), "last_reference": reservation.id}
 
     def output_guard(self, state: ConversationState) -> ConversationState:
         response = state.get("response", "")

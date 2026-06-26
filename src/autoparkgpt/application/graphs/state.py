@@ -54,6 +54,9 @@ class ConversationState(TypedDict, total=False):
     # The reservation slot the assistant most recently asked for (drives both
     # slot-aware extraction and "stay in the reservation flow" routing).
     awaiting_slot: ReservationSlot | None
+    # The most recent reservation the user created or asked about, so status follow-ups
+    # ("is it approved yet?") work without re-typing the reference.
+    last_reference: str | None
     response: str
     sources: list[str]
     reservation_id: str | None

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from enum import StrEnum
 
 from autoparkgpt.application.prompts import INTENT_PROMPT, SLOT_EXTRACTION_PROMPT
@@ -43,20 +44,34 @@ def classify_intent(llm: LLMPort, message: str) -> Intent:
     return Intent.INFO
 
 
-def extract_slots(llm: LLMPort, message: str, *, awaiting: str | None = None) -> dict[str, str]:
+def extract_slots(
+    llm: LLMPort,
+    message: str,
+    *,
+    awaiting: str | None = None,
+    now: datetime | None = None,
+) -> dict[str, str]:
     """Extract any provided reservation fields from a message as a string dict.
 
     ``awaiting`` names the field the assistant just asked for; supplying it helps the
-    model map a terse direct answer (e.g. "Bora") to the right slot.
+    model map a terse direct answer (e.g. "Bora") to the right slot. ``now`` lets the
+    model resolve relative dates ("today", "tomorrow") against the real current time —
+    without it the model has no idea what "today" is and emits a past date.
     """
 
-    prompt = SLOT_EXTRACTION_PROMPT.format(message=message)
+    preface = ""
+    if now is not None:
+        preface += (
+            f"The current date and time is {now:%Y-%m-%d %H:%M} ({now:%A}, UTC). "
+            "Resolve relative expressions such as 'today', 'tonight', and 'tomorrow' "
+            "against it, and always output absolute ISO-8601 datetimes.\n\n"
+        )
     if awaiting:
-        prompt = (
+        preface += (
             f"The assistant just asked the user for their {awaiting}. If the message is a "
             f"direct answer to that question, set the {awaiting} field accordingly.\n\n"
-        ) + prompt
-    raw = llm.generate([ChatMessage.user(prompt)])
+        )
+    raw = llm.generate([ChatMessage.user(preface + SLOT_EXTRACTION_PROMPT.format(message=message))])
     payload = _parse_json_object(raw)
     return {
         key: str(value)
