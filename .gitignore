@@ -44,3 +44,6 @@ memory/
 
 # Stage presentation decks (local, not part of the deliverable)
 docs/STAGE3_PRESENTATION.md
+
+# LangGraph dev local cache
+.langgraph_api/

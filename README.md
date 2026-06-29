@@ -208,6 +208,37 @@ via the environment only and never committed.**
 | `AUTOPARK_ADMIN__USER_WEBHOOK_URL` | — | optional: notify user of the decision |
 | `AUTOPARK_RECORDING__FILE_PATH` | `data/reservations.txt` | approved-reservation record file (MCP) |
 
+LangSmith tracing uses the **standard** `LANGSMITH_*` names (not the `AUTOPARK_` prefix) so
+a single `.env` configures both this app and `langgraph dev`:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `LANGSMITH_TRACING` | `false` | turn tracing on/off (opt-in) |
+| `LANGSMITH_API_KEY` | — | LangSmith key; tracing is a no-op without it |
+| `LANGSMITH_PROJECT` | `autoparkgpt` | LangSmith project the runs land in |
+| `LANGSMITH_ENDPOINT` | — | optional self-hosted/EU endpoint |
+
+---
+
+## Observability (LangSmith tracing)
+
+Set `LANGSMITH_TRACING=true` and `LANGSMITH_API_KEY=...` in `.env`. On startup the app calls
+`configure_tracing()`, which exports these into the process environment so the LangChain
+runnables emit traces — runs (every node + Claude call) appear in your LangSmith project at
+<https://smith.langchain.com>. It fails closed: with tracing off or no key, nothing is
+exported and no data leaves the process; a value already set in the deployment environment
+always wins over `.env`.
+
+### LangGraph Studio
+
+```bash
+langgraph dev        # serves the graphs defined in langgraph.json on http://127.0.0.1:2024
+```
+
+Open the printed Studio URL (`https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024`)
+to visualize and step through both the `chat` and `orchestration` graphs — including pausing
+at the human-approval `interrupt` and resuming with `approve`/`reject`.
+
 ---
 
 ## Development

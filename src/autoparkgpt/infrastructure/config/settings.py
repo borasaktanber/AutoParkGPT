@@ -118,6 +118,30 @@ class RecordingSettings(BaseSettings):
     file_path: str = "data/reservations.txt"
 
 
+class ObservabilitySettings(BaseSettings):
+    """LangSmith tracing configuration.
+
+    Uses the **standard** LangSmith environment variable names (``LANGSMITH_*``) rather
+    than the ``AUTOPARK_`` prefix, so a single ``.env`` drives both this app process and
+    the ``langgraph dev`` server. ``configure_tracing`` exports these back into
+    ``os.environ`` at startup so the LangChain/LangSmith libraries (which read the process
+    environment) pick them up. Disabled by default; no data leaves the process unless
+    ``tracing`` is on and an ``api_key`` is present.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="LANGSMITH_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    tracing: bool = False
+    api_key: SecretStr | None = None
+    project: str = "autoparkgpt"
+    endpoint: str | None = None
+
+
 class AppSettings(BaseSettings):
     """General application / server settings."""
 
@@ -144,6 +168,7 @@ class Settings(BaseSettings):
     )
 
     app: AppSettings = Field(default_factory=AppSettings)
+    observability: ObservabilitySettings = Field(default_factory=ObservabilitySettings)
     admin: AdminSettings = Field(default_factory=AdminSettings)
     recording: RecordingSettings = Field(default_factory=RecordingSettings)
     llm: LLMSettings = Field(default_factory=LLMSettings)
