@@ -1,7 +1,8 @@
 {
   "dependencies": ["."],
   "graphs": {
-    "autoparkgpt": "./src/autoparkgpt/application/graphs/studio.py:make_graph"
+    "chat": "./src/autoparkgpt/application/graphs/studio.py:make_graph",
+    "orchestration": "./src/autoparkgpt/application/graphs/studio.py:make_orchestration_graph"
   },
   "env": ".env"
 }
