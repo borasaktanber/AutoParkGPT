@@ -2,8 +2,14 @@
 
 Exposes a graph factory for `langgraph dev` / LangGraph Studio. The compiled graph is
 built from the real DI container (so Studio talks to the live Claude, Weaviate, and SQL
-backends configured in ``.env``). No application checkpointer is attached — the LangGraph
-dev server supplies its own persistence.
+backends configured in ``.env``). No application checkpointer is attached to the chat
+graph — the LangGraph dev server supplies its own persistence.
+
+Both factories are memoized with ``lru_cache``. The dev server re-invokes the factory on
+every request that needs the graph (e.g. ``GET /assistants/{id}/graph`` for the Studio
+preview); building it lazily each time would re-load the HuggingFace embedding model,
+whose blocking filesystem calls trip the dev server's event-loop "blockbuster" guard and
+fail the request. Building once and reusing keeps the factory non-blocking and fast.
 
 Run:
     langgraph dev
@@ -11,6 +17,7 @@ Run:
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any
 
 from langgraph.checkpoint.memory import MemorySaver
@@ -24,8 +31,9 @@ from autoparkgpt.application.graphs.orchestration import (
 from autoparkgpt.container import build_container
 
 
+@lru_cache(maxsize=1)
 def make_graph() -> Any:
-    """Build the compiled conversation graph for LangGraph Studio."""
+    """Build (once) the compiled conversation graph for LangGraph Studio."""
 
     container = build_container()
     settings = container.settings()
@@ -43,8 +51,9 @@ def make_graph() -> Any:
     return build_chat_graph(nodes, checkpointer=None)
 
 
+@lru_cache(maxsize=1)
 def make_orchestration_graph() -> Any:
-    """Build the compiled reservation-orchestration graph for LangGraph Studio.
+    """Build (once) the compiled reservation-orchestration graph for LangGraph Studio.
 
     Studio can visualize the lifecycle and drive the human-approval ``interrupt``
     (resume the paused run with ``"approve"`` / ``"reject"``).

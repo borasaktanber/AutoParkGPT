@@ -232,12 +232,28 @@ always wins over `.env`.
 ### LangGraph Studio
 
 ```bash
-langgraph dev        # serves the graphs defined in langgraph.json on http://127.0.0.1:2024
+python scripts/enable_studio_pna.py            # one-time: see "PNA" note below
+langgraph dev --no-reload --allow-blocking     # serves chat + orchestration on :2024
 ```
 
 Open the printed Studio URL (`https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024`)
-to visualize and step through both the `chat` and `orchestration` graphs — including pausing
-at the human-approval `interrupt` and resuming with `approve`/`reject`.
+in **Chrome or Edge** (signed in to LangSmith) to visualize and step through both the `chat`
+and `orchestration` graphs — including pausing at the human-approval `interrupt` and resuming
+with `approve`/`reject`.
+
+Three local-dev gotchas, all handled above:
+
+- **`--allow-blocking`** — Studio re-invokes the graph factory per request; ours loads the
+  HuggingFace embedding model, a synchronous (blocking) call the dev server rejects by
+  default. The factory is also memoized (`studio.py`) so the model loads once, then is
+  reused (first preview ~8s, instant after).
+- **`--no-reload`** — `langgraph dev`'s own `.langgraph_api/` persistence writes inside the
+  repo, which otherwise keeps the file-watcher reload-churning.
+- **PNA / `enable_studio_pna.py`** — Chromium treats `smith.langchain.com → 127.0.0.1` as a
+  Private Network Access request; Starlette's CORS rejects that preflight unless built with
+  `allow_private_network=True`, which `langgraph-api` doesn't do and `langgraph.json` can't
+  set. The script patches the installed package in your venv (idempotent; re-run after any
+  `langgraph-api` upgrade). Without it, the browser shows "Failed to fetch" / "NetworkError".
 
 ---
 
