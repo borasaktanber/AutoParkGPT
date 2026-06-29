@@ -41,3 +41,6 @@ data/reservations.txt
 
 # Claude Code local assistant memory (not project code)
 memory/
+
+# Stage presentation decks (local, not part of the deliverable)
+docs/STAGE3_PRESENTATION.md
