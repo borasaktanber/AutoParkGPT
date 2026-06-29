@@ -118,13 +118,27 @@
 
 ---
 
-## Stage 4 — LangGraph Orchestration  ☐ (gated)
+## Stage 4 — LangGraph Orchestration  ☑
 
-- ☐ Unified graph: user input → retrieval → context validation → response → reservation state → human approval → approval result → MCP → persistence → error handling
-- ☐ Typed shared state across all components
-- ☐ End-to-end workflow tests
-- ☐ System testing: load tests (chatbot, admin workflow, MCP), integration, latency/reliability/retrieval-quality measurement
-- ☐ Final README, full docs, CI/CD + infra recommendations, design write-up
+> 173 tests passing at 93% coverage; ruff + `mypy --strict` clean. Verified end-to-end and
+> under load against the live stack.
+
+- ☑ Unified resumable orchestration graph: validate → persist_pending → notify_admin → human_approval (`interrupt`) → apply_decision → mcp_communication → notify_user, + error_handler
+- ☑ Typed shared state (`WorkflowState`); checkpointer persists the paused run across requests
+- ☑ Human approval via LangGraph `interrupt`; `ReservationWorkflow.start()`/`resume()`
+- ☑ Wired as the real path: chat reserve → `workflow.start`; admin decision → `workflow.resume` (optional with safe fallback to keep earlier-stage unit tests self-contained)
+- ☑ MCP communication: `mcp_communication` node uses the recorder port; real `McpReservationRecorder` (MCP client) selectable via `AUTOPARK_RECORDING__BACKEND=mcp`
+- ☑ End-to-end workflow tests (start/interrupt/resume approve/reject/error) + unified create→approve→record→status integration test
+- ☑ System / load testing (`scripts/loadtest.py`): chatbot, admin workflow, MCP — latency/throughput/reliability measured (see `ARCHITECTURE.md` §11)
+- ☑ Final docs (README, `ARCHITECTURE.md` §11 + diagram, `.env.example`), CI/CD + infra recommendations (Terraform now recommended for deployment)
+
+---
+
+## ✅ Project complete — all four stages delivered
+
+RAG chatbot · human-in-the-loop admin approval · MCP server · unified LangGraph
+orchestration. Clean Architecture throughout; Docker Compose; GitHub Actions CI; 173 tests
+at 93% coverage; `mypy --strict` + `ruff` clean.
 
 ---
 

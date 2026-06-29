@@ -105,8 +105,14 @@ class AdminSettings(BaseSettings):
 
 
 class RecordingSettings(BaseSettings):
-    """Stage 3 approved-reservation recording (written by the MCP file recorder)."""
+    """Stage 3/4 approved-reservation recording.
 
+    ``backend`` selects how approvals are recorded: ``file`` writes the file directly
+    (in-process, reliable — the default); ``mcp`` records through the MCP server's
+    ``save_reservation`` tool (genuine MCP communication, Stage 4).
+    """
+
+    backend: Literal["file", "mcp"] = "file"
     # Path to the approved-reservations text file. Confined to the working directory
     # tree by the recorder; the MCP server never takes a path from clients.
     file_path: str = "data/reservations.txt"

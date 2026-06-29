@@ -22,6 +22,7 @@ from autoparkgpt.application.graphs.state import (
     refusal_message,
 )
 from autoparkgpt.application.prompts import SYSTEM_PROMPT, build_answer_prompt
+from autoparkgpt.application.use_cases.reservation_workflow import ReservationWorkflow
 from autoparkgpt.domain.entities.reservation import (
     Reservation,
     ReservationDraft,
@@ -78,6 +79,10 @@ class GraphNodes:
     retrieval: RetrievalSettings
     app: AppSettings
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
+    # Stage 4: when set, reservation creation runs through the orchestration workflow
+    # (validate -> persist -> notify-admin -> await approval). Falls back to a direct
+    # persist + admin-notify when absent (keeps Stage 1/2 unit tests self-contained).
+    workflow: ReservationWorkflow | None = None
 
     # ----- nodes ------------------------------------------------------------ #
     def ingest_input(self, state: ConversationState) -> ConversationState:
@@ -231,20 +236,23 @@ class GraphNodes:
                 "response": f"{exc} Please provide a valid reservation period.",
             }
 
-        saved = self.reservation_repo.add(reservation)
-        _logger.info("reservation_created", reservation_id=saved.id)
-        # Notify the administrator that a reservation is awaiting review (Stage 2).
-        # Best-effort: a notification failure must not fail the reservation.
-        try:
-            self.admin_notifier.notify_new_reservation(saved)
-        except Exception:  # pragma: no cover - defensive; adapters already swallow errors
-            _logger.warning("admin_notify_failed", reservation_id=saved.id, exc_info=True)
+        if self.workflow is not None:
+            # Stage 4: orchestration graph persists, notifies the admin, and pauses at the
+            # human-approval interrupt.
+            self.workflow.start(reservation)
+        else:
+            self.reservation_repo.add(reservation)
+            try:
+                self.admin_notifier.notify_new_reservation(reservation)
+            except Exception:  # pragma: no cover - defensive; adapters already swallow errors
+                _logger.warning("admin_notify_failed", reservation_id=reservation.id, exc_info=True)
+        _logger.info("reservation_created", reservation_id=reservation.id)
         return {
             "draft": ReservationDraft(),
             "awaiting_slot": None,
-            "reservation_id": saved.id,
-            "last_reference": saved.id,  # so "is it approved yet?" works without re-typing
-            "response": _confirmation(saved),
+            "reservation_id": reservation.id,
+            "last_reference": reservation.id,  # so "is it approved yet?" works without re-typing
+            "response": _confirmation(reservation),
         }
 
     def reservation_status(self, state: ConversationState) -> ConversationState:

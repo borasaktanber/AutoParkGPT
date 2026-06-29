@@ -5,6 +5,7 @@ from __future__ import annotations
 import structlog
 
 from autoparkgpt.application.prompts import ADMIN_DECISION_PROMPT
+from autoparkgpt.application.use_cases.reservation_workflow import ReservationWorkflow
 from autoparkgpt.domain.entities.reservation import Reservation, ReservationStatus
 from autoparkgpt.domain.exceptions import ReservationError
 from autoparkgpt.domain.ports.llm import LLMPort
@@ -30,10 +31,12 @@ class AdminApprovalService:
         reservation_repo: ReservationRepositoryPort,
         user_notifier: UserNotifierPort,
         recorder: ReservationRecorderPort | None = None,
+        workflow: ReservationWorkflow | None = None,
     ) -> None:
         self._repo = reservation_repo
         self._notifier = user_notifier
         self._recorder = recorder
+        self._workflow = workflow
 
     def list_pending(self) -> list[Reservation]:
         return self._repo.list_by_status(ReservationStatus.PENDING_APPROVAL)
@@ -53,6 +56,10 @@ class AdminApprovalService:
         reservation = self._repo.find_by_reference(reference)
         if reservation is None:
             raise ReservationError(f"No reservation found for reference '{reference}'.")
+        # Stage 4: if an orchestration run is awaiting approval, drive it (the graph
+        # applies the decision, records via MCP, and notifies the user).
+        if self._workflow is not None and self._workflow.is_pending(reservation.id):
+            return self._workflow.resume(reservation.id, "approve" if approve else "reject")
         updated = reservation.approve() if approve else reservation.reject()
         self._repo.update(updated)
         self._notifier.notify_decision(updated)

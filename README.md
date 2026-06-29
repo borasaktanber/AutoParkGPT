@@ -6,11 +6,11 @@ parking questions (general info, working hours, prices, availability, location) 
 interactively collects reservation requests, behind a layered Clean Architecture with a
 security guardrail pipeline.
 
-> **Project status:** **Stages 1–3 complete** — RAG chatbot, human-in-the-loop
-> administrator approval, and an MCP server that records approved reservations. Stage 4
-> (unified LangGraph orchestration) is planned — see [`TASKS.md`](TASKS.md). Full design
-> rationale is in [`ARCHITECTURE.md`](ARCHITECTURE.md); evaluation methodology in
-> [`EVALUATION.md`](EVALUATION.md).
+> **Project status:** **All four stages complete** — RAG chatbot, human-in-the-loop
+> administrator approval, an MCP server recording approved reservations, and a unified
+> LangGraph orchestration that ties them together (with system/load testing). See
+> [`TASKS.md`](TASKS.md). Full design rationale is in [`ARCHITECTURE.md`](ARCHITECTURE.md);
+> evaluation methodology in [`EVALUATION.md`](EVALUATION.md).
 
 ---
 
@@ -161,6 +161,22 @@ Register it with an MCP host (e.g. Claude Desktop `claude_desktop_config.json`):
 **Security:** the file path is server-configured (never client-supplied — no path
 traversal); inputs are validated/normalized and the `|` separator is rejected in
 free-text fields; `list`/`find` are read-only. Over HTTP, front it with auth.
+
+### Unified orchestration (Stage 4)
+
+The reservation lifecycle runs through one resumable **LangGraph orchestration**
+(`validate → persist → notify-admin → human-approval [interrupt] → apply-decision →
+mcp-communication → notify-user`). The chat reserve node *starts* it; the admin decision
+*resumes* it. Set `AUTOPARK_RECORDING__BACKEND=mcp` to record through the MCP server
+(real client→server) instead of writing the file directly. See
+[`ARCHITECTURE.md`](ARCHITECTURE.md) §11.
+
+System / load testing:
+
+```bash
+# with the server running + Weaviate up + admin token set
+python scripts/loadtest.py    # chatbot, admin workflow, and MCP throughput/latency
+```
 
 ### CLI
 

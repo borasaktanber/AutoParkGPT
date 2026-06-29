@@ -426,3 +426,76 @@ on disk. For production: put the records file on durable/backed-up storage (or s
 recorder adapter for an object-store/DB sink behind the same port), and if the MCP server
 is served over HTTP, front it with authentication. Multi-process writers would need an OS
 file lock rather than the in-process lock. Revisit IaC after Stage 4.
+
+---
+
+## 11. Stage 4 — Unified LangGraph Orchestration
+
+A single resumable **orchestration graph** ties the lifecycle together with typed state
+and a human-approval `interrupt`. It is the real path: the chat reserve node *starts* it,
+and the admin decision *resumes* it.
+
+```mermaid
+flowchart TB
+    START([reservation created in chat]) --> V[validate]
+    V -->|invalid| ERR[error_handler] --> E([END])
+    V -->|ok| P[persist_pending]
+    P --> NA[notify_admin]
+    NA --> HA["human_approval (interrupt — run pauses)"]
+    HA -->|resumed with decision| AD[apply_decision]
+    AD -->|approved| MCP[mcp_communication]
+    AD -->|rejected| NU[notify_user]
+    MCP --> NU
+    NU --> E
+```
+
+### How it integrates the stages
+
+- **User interaction + retrieval + reservation state** — the Stage 1 chat graph; its
+  reserve node now calls `workflow.start(reservation)`.
+- **Persistence** — `persist_pending` (create) and `apply_decision` (status transition)
+  via the SQL repository.
+- **Human approval** — `human_approval` calls LangGraph `interrupt`; the run pauses and is
+  checkpointed. The Stage 2 admin endpoints/agent resume it (`workflow.resume(id,
+  decision)`).
+- **MCP communication** — `mcp_communication` records the approved reservation through the
+  recorder port; with `AUTOPARK_RECORDING__BACKEND=mcp`, that's the real MCP client
+  (`McpReservationRecorder`) calling the Stage 3 server's `save_reservation` tool.
+- **Error handling** — a dedicated `error_handler` node for validation failures.
+- **Typed state** — `WorkflowState` threads the reservation/decision/status through nodes.
+
+### Resumability & safe fallback
+
+The workflow's checkpointer persists the paused run keyed by reservation id, so creation
+(one request) and approval (a later request) span two calls in the same process. Both the
+chat reserve node and `AdminApprovalService` treat the workflow as **optional**: when it's
+absent (Stage 1/2 unit tests), they fall back to a direct persist/transition, so earlier
+stages remain self-contained. In the wired application (DI container) the workflow is
+always present and is the canonical path.
+
+> **Production note:** the in-memory checkpointer is per-process. For multi-process / HA
+> deployments, swap it for the Postgres-backed LangGraph checkpointer so a run started on
+> one worker can be resumed on another.
+
+### System testing (measured)
+
+`scripts/loadtest.py` exercises the three subsystems against the live stack:
+
+| Subsystem | Result |
+|---|---|
+| Chatbot `/chat` (20 req, 4 workers) | mean ≈ 4.9 s, p95 ≈ 9.0 s, ≈ 0.8 req/s (LLM-bound) |
+| Admin create (chat → workflow) | mean ≈ 1.6 s |
+| Admin approve (`workflow.resume`) | **mean ≈ 29 ms** (no LLM) |
+| MCP `save_reservation` (in-memory session) | mean ≈ 6 ms, ≈ 170 saves/s |
+
+Reliability: 10/10 reservations created and approved through the orchestration end-to-end.
+As in earlier stages, end-to-end latency is dominated by the LLM; the orchestration,
+persistence, approval-resume, and MCP layers are all sub-100 ms.
+
+### Stage 4 infrastructure recommendation
+
+**Terraform is now worth introducing for a real deployment** — the system spans the app,
+Weaviate, PostgreSQL, and the MCP process. Recommended: Terraform modules for managed
+Postgres + a managed/standalone Weaviate + a container runtime, the LangGraph Postgres
+checkpointer for resumable workflows across workers, and secrets in a managed store. For
+local/demo, Docker Compose remains sufficient.
