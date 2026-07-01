@@ -10,15 +10,27 @@ its pure components are unit-tested in `tests/unit/eval/`.
 
 ### Retrieval quality
 The retriever's job is to surface the right knowledge document for a question. We score it
-against a gold dataset (query → relevant source documents) with:
+against a gold dataset (query → relevant source documents). A retrieved position counts as
+relevant when its chunk's **source** is in the relevant set (retrieval returns chunks,
+several of which may share a source, so relevance is scored per position).
 
 - **Precision@K** — fraction of the top-K retrieved chunks that are relevant.
 - **Recall@K** — fraction of the relevant documents found within the top-K.
-- **MRR (Mean Reciprocal Rank)** — rewards ranking the relevant document higher.
+- **F1@K** — harmonic mean of Precision@K and Recall@K (a single balanced figure).
+- **Hit Rate@K** (Success@K) — did *any* relevant document make the top-K? (coverage,
+  ignoring rank).
+- **MRR (Mean Reciprocal Rank)** — reciprocal rank of the *first* relevant hit; rewards
+  putting a relevant result at the very top.
+- **MAP (Mean Average Precision)** — precision averaged over the relevant hits; rewards
+  ranking *all* retrieved-relevant chunks highly, not just the first.
+- **nDCG@K** — position-discounted ranking quality, normalised to the ideal ordering of
+  the retrieved-relevant chunks.
 
-These are the spec-required retrieval metrics; MRR is added because ranking quality
-matters for a top-K RAG prompt. Faithfulness / context-precision (RAGAS-style) are
-identified as a recommended future addition (see §5).
+Precision/Recall/MRR are the spec-required metrics; F1, Hit Rate, MAP, and nDCG were added
+to characterise ranking quality more fully. MAP and nDCG are normalised by the number of
+relevant chunks *retrieved in the top-K*, so both stay bounded in [0, 1] despite a single
+relevant document spanning multiple chunks. Faithfulness / answer-quality (LLM-judged) are
+recommended future additions (see §6).
 
 ### Performance
 - **Latency** — mean, p50, and p95 wall-clock time per retrieval.
@@ -57,40 +69,53 @@ python -m eval.run
 ```
 
 `eval/run.py` prints a JSON report. **Measured results** (Weaviate 1.27 hybrid search +
-local `bge-small-en-v1.5` embeddings, `top_k=4`, `alpha=0.5`, 8-query gold set):
+local `bge-small-en-v1.5` embeddings, `top_k=4`, `alpha=0.5`, 8-query gold set, 4 documents
+→ 10 chunks):
 
 ```json
 {
   "retrieval_quality": {
     "num_queries": 8,
     "top_k": 4,
-    "precision_at_k": 0.4375,
-    "recall_at_k": 1.0,
-    "mrr": 1.0
+    "precision_at_k": 0.34375,
+    "recall_at_k": 0.875,
+    "f1_at_k": 0.4833,
+    "hit_rate_at_k": 0.875,
+    "mrr": 0.75,
+    "map": 0.71875,
+    "ndcg_at_k": 0.7674
   },
   "retrieval_latency": {
     "runs": 20,
-    "mean_ms": 25.1,
-    "p50_ms": 24.1,
-    "p95_ms": 32.7,
-    "throughput_per_s": 39.9
+    "mean_ms": 37.7,
+    "p50_ms": 36.9,
+    "p95_ms": 44.3,
+    "throughput_per_s": 26.5
   }
 }
 ```
 
 **Interpretation:**
-- **Recall@4 = 1.0** and **MRR = 1.0** — the correct document is retrieved within the top-4
-  for every query, and ranked first every time. These are the meaningful quality signals
-  for this corpus.
-- **Precision@4 = 0.44** is expected and not a concern: each query has ~one relevant
-  *document*, but retrieval returns four *chunks*, so precision is naturally bounded
-  (often 1–2 of the 4 chunks come from the relevant document). Document-level recall and
-  MRR are the right lens here.
-- **Latency** is single-digit-tens of milliseconds (p95 ≈ 33 ms) for retrieval on a local
-  single-node Weaviate — comfortably interactive; end-to-end `/chat` latency is dominated
-  by the LLM call.
+- **Hit Rate@4 = Recall@4 = 0.875** — the correct document is retrieved within the top-4 for
+  **7 of 8** queries. The single miss is *"How do I get there by public transport?"*: its
+  relevant document (`location.md`) is crowded out of the top-4 by `general_info.md` /
+  `reservation_process.md` chunks, because the phrase "public transport" isn't strongly
+  represented in the location text. This is a concrete, actionable retrieval gap (see §4).
+- **MRR = 0.75, MAP = 0.72, nDCG@4 = 0.77** — for most queries the relevant document is
+  ranked first, but two ("*where is the garage located*" and "*accessible bay*") place it at
+  rank 2, and one misses entirely — so the ranking metrics sit below 1.0. MAP/nDCG being
+  close to MRR here reflects that each query has essentially one relevant document.
+- **Precision@4 = 0.34** is expected and not a concern: each query has ~one relevant
+  *document* but retrieval returns four *chunks*, so precision is naturally bounded (1–2 of
+  the 4 chunks typically come from the relevant document). **F1@4 = 0.48** balances this
+  chunk-level precision against document recall.
+- **Latency** is tens of milliseconds (mean ≈ 38 ms, p95 ≈ 44 ms) for hybrid retrieval on a
+  local single-node Weaviate — comfortably interactive; end-to-end `/chat` latency is
+  dominated by the LLM call (§5).
 
-The metric **logic** is also unit-tested and deterministic (`tests/unit/eval/`).
+Numbers are environment- and corpus-dependent (embedding model, chunking, `alpha`, index
+state); reproduce with the steps above. The metric **logic** is unit-tested and
+deterministic (`tests/unit/eval/test_metrics.py`).
 
 ---
 
@@ -100,10 +125,15 @@ With `bge-small-en-v1.5` embeddings, hybrid search (`alpha=0.5`), and `top_k=4` 
 well-separated documents, we expect high Recall@4 and MRR on this dataset (the documents
 are topically distinct). The tunable levers exposed via configuration:
 
-- `AUTOPARK_RETRIEVAL__TOP_K` — retrieval depth.
+- `AUTOPARK_RETRIEVAL__TOP_K` — retrieval depth. Raising it to 5–6 would recover the
+  "public transport" miss (its `location.md` chunk currently sits just outside the top-4).
 - `AUTOPARK_RETRIEVAL__HYBRID_ALPHA` — dense vs keyword weighting (1.0 = pure vector).
 - `AUTOPARK_RETRIEVAL__CHUNK_SIZE` / `CHUNK_OVERLAP` — chunk granularity.
 - `AUTOPARK_EMBEDDING__PROVIDER` — swap to Voyage `voyage-3` for higher embedding quality.
+
+The one retrieval miss (§3) is a useful worked example: the fix is either a larger `top_k`,
+or enriching `location.md` with directions/"public transport" wording so its embedding
+matches the query — a content change, not a code change.
 
 ---
 
