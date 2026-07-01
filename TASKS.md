@@ -132,7 +132,8 @@
 - ☑ System / load testing (`scripts/loadtest.py`): chatbot, admin workflow, MCP — latency/throughput/reliability measured (see `ARCHITECTURE.md` §11)
 - ☑ LangGraph Studio: `langgraph.json` exposes both `chat` and `orchestration` graphs for `langgraph dev`
 - ☑ LangSmith tracing (opt-in): `ObservabilitySettings` + `configure_tracing()` export the standard `LANGSMITH_*` vars so the app, CLI, and `langgraph dev` all trace from one `.env`
-- ☑ Final docs (README incl. Observability/Studio, `ARCHITECTURE.md` §11 + diagram, `.env.example`), CI/CD + infra recommendations (Terraform now recommended for deployment)
+- ☑ LangGraph Studio local-dev enablement: memoized studio factories, `scripts/enable_studio_pna.py` (CORS Private Network Access patch), documented `--no-reload --allow-blocking` invocation
+- ☑ Final docs (README incl. Observability/Studio, `ARCHITECTURE.md` §11 + diagram, `.env.example`, `docs/STAGE4_PRESENTATION.md` walkthrough + diagrams), CI/CD + infra recommendations (Terraform now recommended for deployment)
 
 ---
 

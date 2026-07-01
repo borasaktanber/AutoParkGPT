@@ -10,7 +10,8 @@ security guardrail pipeline.
 > administrator approval, an MCP server recording approved reservations, and a unified
 > LangGraph orchestration that ties them together (with system/load testing). See
 > [`TASKS.md`](TASKS.md). Full design rationale is in [`ARCHITECTURE.md`](ARCHITECTURE.md);
-> evaluation methodology in [`EVALUATION.md`](EVALUATION.md).
+> evaluation methodology in [`EVALUATION.md`](EVALUATION.md); a Stage 4 walkthrough with
+> diagrams in [`docs/STAGE4_PRESENTATION.md`](docs/STAGE4_PRESENTATION.md).
 
 ---
 
