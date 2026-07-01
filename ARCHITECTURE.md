@@ -499,3 +499,19 @@ Weaviate, PostgreSQL, and the MCP process. Recommended: Terraform modules for ma
 Postgres + a managed/standalone Weaviate + a container runtime, the LangGraph Postgres
 checkpointer for resumable workflows across workers, and secrets in a managed store. For
 local/demo, Docker Compose remains sufficient.
+
+### Observability — LangSmith tracing & LangGraph Studio
+
+Both LangGraph graphs are exposed through `langgraph.json` (`chat`, `orchestration`) so
+`langgraph dev` serves them to **LangGraph Studio** for visual stepping — including pausing
+at the human-approval `interrupt` and resuming with `approve`/`reject`.
+
+Tracing is **opt-in** and uses the *standard* `LANGSMITH_*` environment variables rather
+than the `AUTOPARK_` prefix, deliberately, so a single `.env` configures both this app and
+`langgraph dev`. The catch the design solves: `pydantic-settings` reads `.env` for its own
+typed fields but never exports values back to `os.environ`, where the LangChain/LangSmith
+client actually looks. `ObservabilitySettings` (an `env_prefix="LANGSMITH_"` settings group)
+loads them in a typed, validated way, and `configure_tracing()` — called at app/CLI startup
+before any runnable executes — exports them with `os.environ.setdefault` (so a value already
+present in the deployment environment wins). It fails closed: with tracing off or no API key
+present, nothing is exported and no run data leaves the process.

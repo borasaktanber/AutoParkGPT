@@ -9,6 +9,7 @@ import typer
 from autoparkgpt import __version__
 from autoparkgpt.container import build_container
 from autoparkgpt.infrastructure.config import RetrievalSettings
+from autoparkgpt.infrastructure.observability import configure_tracing
 from autoparkgpt.infrastructure.vectorstore import IngestionPipeline, load_documents
 
 app = typer.Typer(help="AutoParkGPT — parking reservation chatbot.", no_args_is_help=True)
@@ -55,6 +56,7 @@ def chat(session_id: str = typer.Option("cli", help="Conversation session id."))
     """Start an interactive chat session in the terminal."""
 
     container = build_container()
+    configure_tracing(container.settings().observability)
     service = container.chat_service()
     typer.echo("AutoParkGPT ready. Type 'exit' to quit.\n")
     while True:

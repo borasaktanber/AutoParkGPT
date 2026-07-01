@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from autoparkgpt.application.use_cases import ChatService
 from autoparkgpt.container import Container, build_container
 from autoparkgpt.domain.exceptions import DomainError
+from autoparkgpt.infrastructure.observability import configure_tracing
 from autoparkgpt.infrastructure.persistence import seed_dynamic_data
 from autoparkgpt.interface.api.admin import build_admin_router
 from autoparkgpt.interface.api.schemas import ChatReply, ChatRequest, HealthReply
@@ -51,6 +52,9 @@ def create_app(container: Container | None = None) -> FastAPI:
     """Create the FastAPI application, optionally with an injected (test) container."""
 
     container = container or build_container()
+    # Enable LangSmith tracing (opt-in) before any LangChain runnable is built/invoked,
+    # so chatbot and workflow runs from this process show up in LangSmith.
+    configure_tracing(container.settings().observability)
     app = FastAPI(title="AutoParkGPT", version="0.1.0", lifespan=_lifespan)
     app.state.container = container
 

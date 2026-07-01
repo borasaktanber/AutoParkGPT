@@ -120,7 +120,7 @@
 
 ## Stage 4 — LangGraph Orchestration  ☑
 
-> 173 tests passing at 93% coverage; ruff + `mypy --strict` clean. Verified end-to-end and
+> 177 tests passing at 93% coverage; ruff + `mypy --strict` clean. Verified end-to-end and
 > under load against the live stack.
 
 - ☑ Unified resumable orchestration graph: validate → persist_pending → notify_admin → human_approval (`interrupt`) → apply_decision → mcp_communication → notify_user, + error_handler
@@ -130,14 +130,17 @@
 - ☑ MCP communication: `mcp_communication` node uses the recorder port; real `McpReservationRecorder` (MCP client) selectable via `AUTOPARK_RECORDING__BACKEND=mcp`
 - ☑ End-to-end workflow tests (start/interrupt/resume approve/reject/error) + unified create→approve→record→status integration test
 - ☑ System / load testing (`scripts/loadtest.py`): chatbot, admin workflow, MCP — latency/throughput/reliability measured (see `ARCHITECTURE.md` §11)
-- ☑ Final docs (README, `ARCHITECTURE.md` §11 + diagram, `.env.example`), CI/CD + infra recommendations (Terraform now recommended for deployment)
+- ☑ LangGraph Studio: `langgraph.json` exposes both `chat` and `orchestration` graphs for `langgraph dev`
+- ☑ LangSmith tracing (opt-in): `ObservabilitySettings` + `configure_tracing()` export the standard `LANGSMITH_*` vars so the app, CLI, and `langgraph dev` all trace from one `.env`
+- ☑ LangGraph Studio local-dev enablement: memoized studio factories, `scripts/enable_studio_pna.py` (CORS Private Network Access patch), documented `--no-reload --allow-blocking` invocation
+- ☑ Final docs (README incl. Observability/Studio, `ARCHITECTURE.md` §11 + diagram, `.env.example`, `docs/STAGE4_PRESENTATION.md` walkthrough + diagrams), CI/CD + infra recommendations (Terraform now recommended for deployment)
 
 ---
 
 ## ✅ Project complete — all four stages delivered
 
 RAG chatbot · human-in-the-loop admin approval · MCP server · unified LangGraph
-orchestration. Clean Architecture throughout; Docker Compose; GitHub Actions CI; 173 tests
+orchestration. Clean Architecture throughout; Docker Compose; GitHub Actions CI; 177 tests
 at 93% coverage; `mypy --strict` + `ruff` clean.
 
 ---
