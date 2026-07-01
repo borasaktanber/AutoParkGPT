@@ -71,7 +71,7 @@
 
 ### 1E. Evaluation  ☑
 - ☑ Gold dataset (query → relevant docs) in `eval/`
-- ☑ Retrieval metrics: Recall@K, Precision@K, MRR (pure + tested)
+- ☑ Retrieval metrics: Precision@K, Recall@K, F1@K, Hit Rate@K, MRR, MAP, nDCG@K (pure + tested)
 - ☑ Performance: latency p50/p95, throughput
 - ☑ Faithfulness / context-precision (RAGAS-style) — documented as recommended next metric
 - ☑ `EVALUATION.md` report
@@ -120,7 +120,7 @@
 
 ## Stage 4 — LangGraph Orchestration  ☑
 
-> 180 tests passing at 93% coverage; ruff + `mypy --strict` clean. Verified end-to-end and
+> 184 tests passing at 93% coverage; ruff + `mypy --strict` clean. Verified end-to-end and
 > under load against the live stack.
 
 - ☑ Unified resumable orchestration graph: validate → persist_pending → notify_admin → human_approval (`interrupt`) → apply_decision → mcp_communication → notify_user, + error_handler
@@ -140,7 +140,7 @@
 ## ✅ Project complete — all four stages delivered
 
 RAG chatbot · human-in-the-loop admin approval · MCP server · unified LangGraph
-orchestration. Clean Architecture throughout; Docker Compose; GitHub Actions CI; 180 tests
+orchestration. Clean Architecture throughout; Docker Compose; GitHub Actions CI; 184 tests
 at 93% coverage; `mypy --strict` + `ruff` clean.
 
 ---
